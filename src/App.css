@@ -64,3 +64,11 @@ h1 {
     padding: 48px 24px;
   }
 }
+
+.status-connected .status-dot {
+  background: #3f7d4c;
+}
+
+.status-error .status-dot {
+  background: #a43f35;
+}
