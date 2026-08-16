@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FocusEvent, type PointerEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FocusEvent, type PointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabase'
 
@@ -172,8 +172,26 @@ export function ShopInventory({ shopId, canManageManual = false }: { shopId: str
 
 function HoverTooltip({ label, title, content }: { label: string; title: string; content: string }) {
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null)
+  const closeTimer = useRef<number | null>(null)
+
+  function cancelClose() {
+    if (closeTimer.current === null) return
+    window.clearTimeout(closeTimer.current)
+    closeTimer.current = null
+  }
+
+  function scheduleClose() {
+    cancelClose()
+    closeTimer.current = window.setTimeout(() => {
+      setPosition(null)
+      closeTimer.current = null
+    }, 220)
+  }
+
+  useEffect(() => () => cancelClose(), [])
 
   function positionNearPointer(clientX: number, clientY: number) {
+    cancelClose()
     const tooltipWidth = Math.min(390, window.innerWidth - 20)
     const left = Math.max(10, Math.min(clientX + 15, window.innerWidth - tooltipWidth - 10))
     const top = clientY > window.innerHeight - 300 ? Math.max(10, clientY - 280) : clientY + 18
@@ -196,14 +214,20 @@ function HoverTooltip({ label, title, content }: { label: string; title: string;
         tabIndex={0}
         onPointerEnter={handlePointerMove}
         onPointerMove={handlePointerMove}
-        onPointerLeave={() => setPosition(null)}
+        onPointerLeave={scheduleClose}
         onFocus={handleFocus}
-        onBlur={() => setPosition(null)}
+        onBlur={scheduleClose}
       >
         {label}
       </span>
       {position && createPortal(
-        <span className="inventory-cursor-tooltip" role="tooltip" style={position}>
+        <span
+          className="inventory-cursor-tooltip"
+          role="tooltip"
+          style={position}
+          onPointerEnter={cancelClose}
+          onPointerLeave={scheduleClose}
+        >
           <strong>{title}</strong>
           {content}
         </span>,
