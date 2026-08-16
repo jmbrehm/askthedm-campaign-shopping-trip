@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import type { Session } from '@supabase/supabase-js'
+import { CharacterManager } from './components/CharacterManager'
 import { normalizeUsername, usernameToAuthEmail, validateUsername } from './lib/auth'
 import { supabase } from './lib/supabase'
 import './App.css'
@@ -92,7 +93,11 @@ function App() {
       </header>
 
       {session ? (
-        <Dashboard profile={profile} profileError={profileError} />
+        <Dashboard
+          profile={profile}
+          profileError={profileError}
+          userId={session.user.id}
+        />
       ) : (
         <AuthPanel />
       )}
@@ -111,21 +116,32 @@ function LoadingScreen() {
   )
 }
 
-function Dashboard({ profile, profileError }: { profile: Profile | null; profileError: string }) {
+function Dashboard({
+  profile,
+  profileError,
+  userId,
+}: {
+  profile: Profile | null
+  profileError: string
+  userId: string
+}) {
   return (
-    <section className="card dashboard-card">
+    <section className="dashboard">
       {profileError ? (
         <p className="message message-error">{profileError}</p>
       ) : profile ? (
         <>
-          <p className="eyebrow">Signed in</p>
-          <h1>Welcome, {profile.username}</h1>
-          <p className="description">
-            {profile.is_admin
-              ? 'Your DM workshop is ready. Campaign management is the next room we will build.'
-              : 'Your account is ready. Character creation is the next room we will build.'}
-          </p>
-          <div className="role-badge">{profile.is_admin ? 'DM / Administrator' : 'Player'}</div>
+          <div className="card dashboard-card">
+            <p className="eyebrow">Signed in</p>
+            <h1>Welcome, {profile.username}</h1>
+            <p className="description">
+              {profile.is_admin
+                ? 'Manage your adventurers here. Campaign management is coming next.'
+                : 'Create an adventurer to prepare for campaign invitations and shopping trips.'}
+            </p>
+            <div className="role-badge">{profile.is_admin ? 'DM / Administrator' : 'Player'}</div>
+          </div>
+          <CharacterManager userId={userId} />
         </>
       ) : (
         <p className="loading-line">Loading your account…</p>
