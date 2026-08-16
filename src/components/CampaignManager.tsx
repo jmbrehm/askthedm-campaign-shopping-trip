@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { ItemCatalogManager } from './ItemCatalogManager'
+import { PurchaseLedger } from './PurchaseHistory'
 import { ShopInventory } from './ShopInventory'
 
 type LocationClassification = 'village' | 'town' | 'city' | 'metropolis'
@@ -952,6 +953,14 @@ function DmShopLayer({ shop, location }: { shop: Shop; location: Location }) {
       )}
 
       <ShopInventory key={shop.id} shopId={shop.id} canManageManual />
+
+      <div className="dm-browser-section-heading purchase-ledger-heading">
+        <div>
+          <p className="eyebrow">DM records</p>
+          <h3 className="browser-list-heading">Purchase ledger</h3>
+        </div>
+      </div>
+      <PurchaseLedger shopId={shop.id} showBuyer />
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
+import { PurchaseHistoryDialog } from './PurchaseHistory'
 
 type Character = {
   id: string
@@ -61,6 +62,7 @@ export function CharacterManager({
   const [loadError, setLoadError] = useState('')
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingCharacter, setEditingCharacter] = useState<Character | null>(null)
+  const [historyCharacter, setHistoryCharacter] = useState<Character | null>(null)
 
   const fetchCharacters = useCallback(() => {
     return supabase
@@ -226,11 +228,19 @@ export function CharacterManager({
               selectable={selectable}
               selected={selectedCharacterId === character.id}
               onSelect={() => onSelectCharacter?.(character.id)}
+              onHistory={() => setHistoryCharacter(character)}
               onEdit={() => openEditForm(character)}
               onDelete={() => void deleteCharacter(character)}
             />
           ))}
         </div>
+      )}
+      {historyCharacter && (
+        <PurchaseHistoryDialog
+          characterId={historyCharacter.id}
+          characterName={historyCharacter.name}
+          onClose={() => setHistoryCharacter(null)}
+        />
       )}
     </section>
   )
@@ -241,6 +251,7 @@ function CharacterCard({
   selectable,
   selected,
   onSelect,
+  onHistory,
   onEdit,
   onDelete,
 }: {
@@ -248,6 +259,7 @@ function CharacterCard({
   selectable: boolean
   selected: boolean
   onSelect: () => void
+  onHistory: () => void
   onEdit: () => void
   onDelete: () => void
 }) {
@@ -265,6 +277,7 @@ function CharacterCard({
           <h3>{character.name}</h3>
         </div>
         <div className="character-actions">
+          <button className="text-button" type="button" onClick={onHistory}>History</button>
           <button className="text-button" type="button" onClick={onEdit}>Edit</button>
           <button className="text-button text-button-danger" type="button" onClick={onDelete}>Delete</button>
         </div>
