@@ -2391,16 +2391,6 @@ textarea:focus {
   }
 }
 
-.purchase-ledger-heading {
-  margin-top: 48px;
-  padding-top: 32px;
-  border-top: 1px solid rgba(197, 163, 97, 0.28);
-}
-
-.purchase-ledger-heading .eyebrow {
-  margin: 0 0 5px;
-}
-
 .purchase-history-dialog {
   width: min(900px, 100%);
   height: min(780px, calc(100vh - 48px));
@@ -2421,6 +2411,7 @@ textarea:focus {
 
 .purchase-ledger {
   min-width: 0;
+  margin-top: 24px;
 }
 
 .purchase-ledger-empty {

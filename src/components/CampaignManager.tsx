@@ -555,6 +555,7 @@ function DmCampaignBrowser({
   onSaved: () => Promise<void>
 }) {
   const [selectedShopId, setSelectedShopId] = useState<string | null>(null)
+  const [showPurchaseHistory, setShowPurchaseHistory] = useState(false)
   const selectedLocation = locations.find((location) => location.id === selectedLocationId) ?? null
   const locationShops = selectedLocation
     ? shops.filter((shop) => shop.location_id === selectedLocation.id)
@@ -562,9 +563,10 @@ function DmCampaignBrowser({
   const selectedShop = locationShops.find((shop) => shop.id === selectedShopId) ?? null
 
   const goBack = useCallback(() => {
-    if (selectedShopId) setSelectedShopId(null)
+    if (showPurchaseHistory) setShowPurchaseHistory(false)
+    else if (selectedShopId) setSelectedShopId(null)
     else onBack()
-  }, [onBack, selectedShopId])
+  }, [onBack, selectedShopId, showPurchaseHistory])
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow
@@ -595,10 +597,11 @@ function DmCampaignBrowser({
       >
         <header className="campaign-browser-header">
           <button className="browser-back-button" type="button" onClick={goBack}>
-            {selectedShop ? '← Location' : selectedLocation ? '← Campaign' : '← Workshop'}
+            {showPurchaseHistory ? '← Shop' : selectedShop ? '← Location' : selectedLocation ? '← Campaign' : '← Workshop'}
           </button>
           <div className="browser-breadcrumb" id="dm-campaign-browser-title">
             <button type="button" onClick={() => {
+              setShowPurchaseHistory(false)
               setSelectedShopId(null)
               if (selectedLocation) onBack()
             }}>{campaign.name}</button>
@@ -606,7 +609,10 @@ function DmCampaignBrowser({
               <>
                 <span aria-hidden="true">—</span>
                 {selectedShop ? (
-                  <button type="button" onClick={() => setSelectedShopId(null)}>{selectedLocation.name}</button>
+                  <button type="button" onClick={() => {
+                    setShowPurchaseHistory(false)
+                    setSelectedShopId(null)
+                  }}>{selectedLocation.name}</button>
                 ) : (
                   <strong>{selectedLocation.name}</strong>
                 )}
@@ -615,7 +621,17 @@ function DmCampaignBrowser({
             {selectedShop && (
               <>
                 <span aria-hidden="true">—</span>
-                <strong>{selectedShop.name}</strong>
+                {showPurchaseHistory ? (
+                  <button type="button" onClick={() => setShowPurchaseHistory(false)}>{selectedShop.name}</button>
+                ) : (
+                  <strong>{selectedShop.name}</strong>
+                )}
+              </>
+            )}
+            {showPurchaseHistory && (
+              <>
+                <span aria-hidden="true">—</span>
+                <strong>Purchase history</strong>
               </>
             )}
           </div>
@@ -625,8 +641,14 @@ function DmCampaignBrowser({
         </header>
 
         <div className="campaign-browser-content">
-          {selectedShop && selectedLocation ? (
-            <DmShopLayer shop={selectedShop} location={selectedLocation} />
+          {selectedShop && selectedLocation && showPurchaseHistory ? (
+            <DmPurchaseHistoryLayer shop={selectedShop} location={selectedLocation} />
+          ) : selectedShop && selectedLocation ? (
+            <DmShopLayer
+              shop={selectedShop}
+              location={selectedLocation}
+              onViewPurchaseHistory={() => setShowPurchaseHistory(true)}
+            />
           ) : selectedLocation ? (
             <DmLocationLayer
               location={selectedLocation}
@@ -661,7 +683,7 @@ function DmCampaignBrowser({
         </div>
 
         <footer className="campaign-browser-footer">
-          Press <kbd>Esc</kbd> to {selectedShop ? 'return to the location' : editor ? 'cancel editing' : selectedLocation ? 'return to the campaign' : 'close'}.
+          Press <kbd>Esc</kbd> to {showPurchaseHistory ? 'return to the shop' : selectedShop ? 'return to the location' : editor ? 'cancel editing' : selectedLocation ? 'return to the campaign' : 'close'}.
         </footer>
       </section>
     </div>
@@ -896,7 +918,15 @@ function DmLocationLayer({
   )
 }
 
-function DmShopLayer({ shop, location }: { shop: Shop; location: Location }) {
+function DmShopLayer({
+  shop,
+  location,
+  onViewPurchaseHistory,
+}: {
+  shop: Shop
+  location: Location
+  onViewPurchaseHistory: () => void
+}) {
   const [addingManualItem, setAddingManualItem] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [message, setMessage] = useState('')
@@ -934,6 +964,9 @@ function DmShopLayer({ shop, location }: { shop: Shop; location: Location }) {
           <button className="button button-primary button-inline" type="button" disabled={generating || addingManualItem} onClick={() => setAddingManualItem(true)}>
             Add manual item
           </button>
+          <button className="button button-secondary button-inline" type="button" disabled={generating || addingManualItem} onClick={onViewPurchaseHistory}>
+            Purchase history
+          </button>
         </div>
       </div>
 
@@ -953,13 +986,19 @@ function DmShopLayer({ shop, location }: { shop: Shop; location: Location }) {
       )}
 
       <ShopInventory key={shop.id} shopId={shop.id} canManageManual />
+    </div>
+  )
+}
 
-      <div className="dm-browser-section-heading purchase-ledger-heading">
-        <div>
-          <p className="eyebrow">DM records</p>
-          <h3 className="browser-list-heading">Purchase ledger</h3>
-        </div>
+function DmPurchaseHistoryLayer({ shop, location }: { shop: Shop; location: Location }) {
+  return (
+    <div className="browser-view dm-browser-view">
+      <div className="browser-introduction">
+        <p className="eyebrow">DM records · {titleCase(location.classification)}</p>
+        <h2>Purchase history</h2>
+        <p>Completed purchases from {shop.name} appear here automatically.</p>
       </div>
+
       <PurchaseLedger shopId={shop.id} showBuyer />
     </div>
   )
