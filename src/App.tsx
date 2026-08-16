@@ -141,11 +141,11 @@ function Dashboard({
           </div>
 
           <div className={profile.is_admin ? 'dashboard-workspace admin-workspace' : 'dashboard-workspace player-workspace'}>
-            <div className={profile.is_admin ? 'dashboard-column' : 'player-dashboard-content'}>
+            <div className={profile.is_admin ? 'dashboard-column character-dashboard-column' : 'player-dashboard-content'}>
               <CharacterManager userId={userId} />
             </div>
             {profile.is_admin && (
-              <div className="dashboard-column">
+              <div className="dashboard-column campaign-dashboard-column">
                 <CampaignManager userId={userId} />
               </div>
             )}
