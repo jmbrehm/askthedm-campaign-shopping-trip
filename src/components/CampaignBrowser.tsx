@@ -22,7 +22,14 @@ type Shop = {
   location_id: string
   name: string
   classification: string
+  classifications: string[]
   description: string
+}
+
+type ShopClassificationRow = {
+  shop_id: string
+  classification: string
+  display_order: number
 }
 
 type CampaignBrowserProps = {
@@ -80,20 +87,26 @@ export function CampaignBrowser({ campaign, characterId, onClose }: CampaignBrow
         return
       }
 
-      const shopResult = await supabase
-        .from('shops')
-        .select('id, location_id, name, classification, description')
-        .in('location_id', nextLocations.map((location) => location.id))
-        .order('display_order')
-        .order('name')
+      const [shopResult, shopClassificationResult] = await Promise.all([
+        supabase
+          .from('shops')
+          .select('id, location_id, name, classification, description')
+          .in('location_id', nextLocations.map((location) => location.id))
+          .order('display_order')
+          .order('name'),
+        supabase
+          .from('shop_classifications')
+          .select('shop_id, classification, display_order')
+          .order('display_order'),
+      ])
 
       if (!isActive) return
 
-      if (shopResult.error) {
-        console.error('Could not load campaign shops:', shopResult.error)
+      if (shopResult.error || shopClassificationResult.error) {
+        console.error('Could not load campaign shops:', shopResult.error ?? shopClassificationResult.error)
         setMessage('The locations loaded, but their shops could not be loaded.')
       } else {
-        setShops(shopResult.data ?? [])
+        setShops(attachShopClassifications(shopResult.data ?? [], shopClassificationResult.data ?? []))
       }
 
       setLoading(false)
@@ -318,7 +331,7 @@ function LocationView({
         <div className="browser-card-list">
           {shops.map((shop) => (
             <button className="browser-entity-card" type="button" key={shop.id} onClick={() => onSelectShop(shop.id)}>
-              <span className="classification-badge shop-classification">{shop.classification}</span>
+              <ShopClassificationBadges classifications={shop.classifications} />
               <strong>{shop.name}</strong>
               <span>{shop.description || 'No shop description has been provided.'}</span>
               <small>Enter shop →</small>
@@ -335,7 +348,7 @@ function ShopView({ shop, location, characterId }: { shop: Shop; location: Locat
   return (
     <div className="browser-view">
       <div className="browser-introduction">
-        <p className="eyebrow">{shop.classification} shop</p>
+        <p className="eyebrow">{shop.classifications.map(titleCase).join(' / ')} shop</p>
         <h2>{shop.name}</h2>
         {shop.description && <p>{shop.description}</p>}
       </div>
@@ -355,6 +368,34 @@ function ShopView({ shop, location, characterId }: { shop: Shop; location: Locat
       />
     </div>
   )
+}
+
+function attachShopClassifications(
+  shops: Array<Omit<Shop, 'classifications'>>,
+  rows: ShopClassificationRow[],
+): Shop[] {
+  return shops.map((shop) => {
+    const classifications = rows
+      .filter((row) => row.shop_id === shop.id)
+      .sort((left, right) => left.display_order - right.display_order)
+      .map((row) => row.classification)
+
+    return { ...shop, classifications: classifications.length > 0 ? classifications : [shop.classification] }
+  })
+}
+
+function ShopClassificationBadges({ classifications }: { classifications: string[] }) {
+  return (
+    <span className="shop-classification-badges">
+      {classifications.map((classification) => (
+        <span className="classification-badge shop-classification" key={classification}>{titleCase(classification)}</span>
+      ))}
+    </span>
+  )
+}
+
+function titleCase(value: string) {
+  return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
 
 function LocationAccessBadge({ accessible }: { accessible: boolean }) {

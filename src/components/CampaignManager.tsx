@@ -28,7 +28,14 @@ type Shop = {
   location_id: string
   name: string
   classification: ShopClassification
+  classifications: ShopClassification[]
   description: string
+}
+
+type ShopClassificationRow = {
+  shop_id: string
+  classification: ShopClassification
+  display_order: number
 }
 
 type ShopGenerationSummary = {
@@ -114,10 +121,11 @@ export function CampaignManager({ userId }: { userId: string }) {
   const [catalogOpen, setCatalogOpen] = useState(false)
 
   const fetchHierarchy = useCallback(async () => {
-    const [campaignResult, locationResult, shopResult, requestResult, characterResult, profileResult] = await Promise.all([
+    const [campaignResult, locationResult, shopResult, shopClassificationResult, requestResult, characterResult, profileResult] = await Promise.all([
       supabase.from('campaigns').select('id, name, description, is_listed').order('name'),
       supabase.from('locations').select('id, campaign_id, name, classification, description, is_accessible').order('display_order').order('name'),
       supabase.from('shops').select('id, location_id, name, classification, description').order('display_order').order('name'),
+      supabase.from('shop_classifications').select('shop_id, classification, display_order').order('display_order'),
       supabase
         .from('campaign_character_memberships')
         .select('campaign_id, character_id, requested_at')
@@ -130,6 +138,7 @@ export function CampaignManager({ userId }: { userId: string }) {
     const error = campaignResult.error
       ?? locationResult.error
       ?? shopResult.error
+      ?? shopClassificationResult.error
       ?? requestResult.error
       ?? characterResult.error
       ?? profileResult.error
@@ -137,7 +146,7 @@ export function CampaignManager({ userId }: { userId: string }) {
     return {
       campaigns: campaignResult.data ?? [],
       locations: locationResult.data ?? [],
-      shops: shopResult.data ?? [],
+      shops: attachShopClassifications(shopResult.data ?? [], shopClassificationResult.data ?? []),
       joinRequests: requestResult.data ?? [],
       requestCharacters: characterResult.data ?? [],
       requestProfiles: profileResult.data ?? [],
@@ -942,7 +951,7 @@ function DmLocationLayer({
             return (
               <div className="dm-browser-card-wrap shop-management-card" key={shop.id}>
                 <button className="browser-entity-card" type="button" onClick={() => onSelectShop(shop.id)}>
-                  <span className="classification-badge shop-classification">{titleCase(shop.classification)}</span>
+                  <ShopClassificationBadges classifications={shop.classifications} />
                   <strong>{shop.name}</strong>
                   <span>{shop.description || 'No shop description has been provided.'}</span>
                   <small>Enter shop →</small>
@@ -998,7 +1007,7 @@ function DmShopLayer({
   return (
     <div className="browser-view dm-browser-view">
       <div className="browser-introduction">
-        <p className="eyebrow">{titleCase(shop.classification)} shop · {titleCase(location.classification)}</p>
+        <p className="eyebrow">{formatShopClassifications(shop.classifications)} shop · {titleCase(location.classification)}</p>
         <h2>{shop.name}</h2>
         {shop.description && <p>{shop.description}</p>}
       </div>
@@ -1333,7 +1342,7 @@ function ShopEditor({
 }) {
   const [name, setName] = useState(shop?.name ?? '')
   const [description, setDescription] = useState(shop?.description ?? '')
-  const [classification, setClassification] = useState<ShopClassification>(shop?.classification ?? 'mundane')
+  const [classifications, setClassifications] = useState<ShopClassification[]>(shop?.classifications ?? [shop?.classification ?? 'mundane'])
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState('')
 
@@ -1346,10 +1355,13 @@ function ShopEditor({
     }
 
     setSubmitting(true)
-    const values = { location_id: locationId, name: cleanName, classification, description: description.trim() }
-    const { error } = shop
-      ? await supabase.from('shops').update(values).eq('id', shop.id)
-      : await supabase.from('shops').insert(values)
+    const { error } = await supabase.rpc('save_shop', {
+      target_shop_id: shop?.id ?? null,
+      target_location_id: locationId,
+      target_name: cleanName,
+      target_description: description.trim(),
+      target_classifications: classifications,
+    })
 
     await finishEditorSave(error, setMessage, onSaved, setSubmitting)
   }
@@ -1357,8 +1369,76 @@ function ShopEditor({
   return (
     <EntityEditorShell title={shop ? `Edit ${shop.name}` : 'Add a shop'} onCancel={onCancel} onSubmit={submit} submitting={submitting} submitLabel={shop ? 'Save shop' : 'Add shop'} message={message} nested>
       <TextFields name={name} description={description} entity="shop" onNameChange={setName} onDescriptionChange={setDescription} />
-      <ClassificationSelect value={classification} options={SHOP_OPTIONS} onChange={(value) => setClassification(value as ShopClassification)} />
+      <ShopClassificationEditor classifications={classifications} onChange={setClassifications} />
     </EntityEditorShell>
+  )
+}
+
+function ShopClassificationEditor({
+  classifications,
+  onChange,
+}: {
+  classifications: ShopClassification[]
+  onChange: (classifications: ShopClassification[]) => void
+}) {
+  const addClassification = () => {
+    const next = SHOP_OPTIONS.find((option) => !classifications.includes(option.value))
+    if (next) onChange([...classifications, next.value])
+  }
+
+  return (
+    <fieldset className="shop-classification-editor">
+      <legend>Shop classifications</legend>
+      <div className="shop-classification-fields">
+        {classifications.map((classification, index) => (
+          <div className="shop-classification-field" key={`${classification}-${index}`}>
+            <label htmlFor={`shop-classification-${index}`}>
+              {index === 0 ? 'Primary classification' : `Additional classification ${index}`}
+            </label>
+            <div className="shop-classification-control">
+              <select
+                id={`shop-classification-${index}`}
+                value={classification}
+                onChange={(event) => {
+                  const next = [...classifications]
+                  next[index] = event.target.value as ShopClassification
+                  onChange(next)
+                }}
+              >
+                {SHOP_OPTIONS.map((option) => (
+                  <option
+                    value={option.value}
+                    key={option.value}
+                    disabled={option.value !== classification && classifications.includes(option.value)}
+                  >
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              {index > 0 && (
+                <button
+                  className="classification-remove-button"
+                  type="button"
+                  aria-label={`Remove ${titleCase(classification)} classification`}
+                  onClick={() => onChange(classifications.filter((_, classificationIndex) => classificationIndex !== index))}
+                >
+                  −
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+      <button
+        className="classification-add-button"
+        type="button"
+        onClick={addClassification}
+        disabled={classifications.length === SHOP_OPTIONS.length}
+      >
+        <span aria-hidden="true">+</span> Add classification
+      </button>
+      <p>Inventory generation rolls the location’s full item formula once for each classification.</p>
+    </fieldset>
   )
 }
 
@@ -1465,6 +1545,34 @@ async function finishEditorSave(
 
 function validateText(name: string, description: string, maxNameLength: number) {
   return name.length >= 1 && name.length <= maxNameLength && description.length <= 1000
+}
+
+function attachShopClassifications(
+  shops: Array<Omit<Shop, 'classifications'>>,
+  rows: ShopClassificationRow[],
+): Shop[] {
+  return shops.map((shop) => {
+    const classifications = rows
+      .filter((row) => row.shop_id === shop.id)
+      .sort((left, right) => left.display_order - right.display_order)
+      .map((row) => row.classification)
+
+    return { ...shop, classifications: classifications.length > 0 ? classifications : [shop.classification] }
+  })
+}
+
+function ShopClassificationBadges({ classifications }: { classifications: ShopClassification[] }) {
+  return (
+    <span className="shop-classification-badges">
+      {classifications.map((classification) => (
+        <span className="classification-badge shop-classification" key={classification}>{titleCase(classification)}</span>
+      ))}
+    </span>
+  )
+}
+
+function formatShopClassifications(classifications: ShopClassification[]) {
+  return classifications.map(titleCase).join(' / ')
 }
 
 function titleCase(value: string) {

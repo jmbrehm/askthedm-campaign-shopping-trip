@@ -1003,6 +1003,12 @@ textarea:focus {
   color: #5c4d38;
 }
 
+.shop-classification-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .entity-actions {
   display: flex;
   align-items: center;
@@ -1077,6 +1083,83 @@ textarea:focus {
   color: #82725b;
   font-size: 0.72rem;
   text-align: right;
+}
+
+.shop-classification-editor {
+  margin: 22px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.shop-classification-editor legend {
+  margin-bottom: 9px;
+  font-weight: 750;
+}
+
+.shop-classification-fields {
+  display: grid;
+  gap: 12px;
+}
+
+.shop-classification-field label {
+  display: block;
+  margin-bottom: 6px;
+  color: #665642;
+  font-size: 0.76rem;
+}
+
+.shop-classification-control {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.shop-classification-control select {
+  flex: 1;
+}
+
+.classification-add-button,
+.classification-remove-button {
+  border: 1px solid #9e865d;
+  background: #eadcbd;
+  color: #4c3825;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.classification-add-button {
+  margin-top: 12px;
+  padding: 9px 13px;
+  border-radius: 7px;
+}
+
+.classification-add-button span {
+  margin-right: 5px;
+  font-size: 1rem;
+}
+
+.classification-remove-button {
+  width: 42px;
+  border-radius: 7px;
+  font-size: 1.2rem;
+}
+
+.classification-add-button:hover:not(:disabled),
+.classification-remove-button:hover:not(:disabled) {
+  border-color: #76572f;
+  background: #dfc994;
+}
+
+.classification-add-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.shop-classification-editor > p {
+  margin: 10px 0 0;
+  color: #77664f;
+  font-size: 0.78rem;
 }
 
 .classification-field {
