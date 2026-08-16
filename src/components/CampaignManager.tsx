@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { ItemCatalogManager } from './ItemCatalogManager'
+import { ShopInventory } from './ShopInventory'
 
 type LocationClassification = 'village' | 'town' | 'city' | 'metropolis'
 type ShopClassification = 'mundane' | 'alchemy' | 'smith' | 'magic' | 'jewelry' | 'tailored' | 'wondrous'
@@ -44,6 +45,15 @@ type LocationGenerationSummary = {
   generated_count: number
   rejected_count: number
   shops: ShopGenerationSummary[]
+}
+
+type ManualCatalogItem = {
+  id: string
+  name: string
+  classification: ShopClassification
+  rarity: 'common' | 'uncommon' | 'rare' | 'very_rare' | 'legendary'
+  price_mode: 'rarity_roll' | 'fixed' | 'manual_only'
+  fixed_price_cp: number | null
 }
 
 type JoinRequest = {
@@ -543,10 +553,17 @@ function DmCampaignBrowser({
   onCancelEditor: () => void
   onSaved: () => Promise<void>
 }) {
+  const [selectedShopId, setSelectedShopId] = useState<string | null>(null)
   const selectedLocation = locations.find((location) => location.id === selectedLocationId) ?? null
   const locationShops = selectedLocation
     ? shops.filter((shop) => shop.location_id === selectedLocation.id)
     : []
+  const selectedShop = locationShops.find((shop) => shop.id === selectedShopId) ?? null
+
+  const goBack = useCallback(() => {
+    if (selectedShopId) setSelectedShopId(null)
+    else onBack()
+  }, [onBack, selectedShopId])
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow
@@ -560,12 +577,12 @@ function DmCampaignBrowser({
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key !== 'Escape') return
       event.preventDefault()
-      onBack()
+      goBack()
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [onBack])
+  }, [goBack])
 
   return (
     <div className="campaign-browser-backdrop" role="presentation">
@@ -576,15 +593,28 @@ function DmCampaignBrowser({
         aria-labelledby="dm-campaign-browser-title"
       >
         <header className="campaign-browser-header">
-          <button className="browser-back-button" type="button" onClick={onBack}>
-            {selectedLocation ? '← Campaign' : '← Workshop'}
+          <button className="browser-back-button" type="button" onClick={goBack}>
+            {selectedShop ? '← Location' : selectedLocation ? '← Campaign' : '← Workshop'}
           </button>
           <div className="browser-breadcrumb" id="dm-campaign-browser-title">
-            <button type="button" onClick={() => selectedLocation && onBack()}>{campaign.name}</button>
+            <button type="button" onClick={() => {
+              setSelectedShopId(null)
+              if (selectedLocation) onBack()
+            }}>{campaign.name}</button>
             {selectedLocation && (
               <>
                 <span aria-hidden="true">—</span>
-                <strong>{selectedLocation.name}</strong>
+                {selectedShop ? (
+                  <button type="button" onClick={() => setSelectedShopId(null)}>{selectedLocation.name}</button>
+                ) : (
+                  <strong>{selectedLocation.name}</strong>
+                )}
+              </>
+            )}
+            {selectedShop && (
+              <>
+                <span aria-hidden="true">—</span>
+                <strong>{selectedShop.name}</strong>
               </>
             )}
           </div>
@@ -594,7 +624,9 @@ function DmCampaignBrowser({
         </header>
 
         <div className="campaign-browser-content">
-          {selectedLocation ? (
+          {selectedShop && selectedLocation ? (
+            <DmShopLayer shop={selectedShop} location={selectedLocation} />
+          ) : selectedLocation ? (
             <DmLocationLayer
               location={selectedLocation}
               shops={locationShops}
@@ -604,6 +636,7 @@ function DmCampaignBrowser({
               onDeleteLocation={() => onDeleteLocation(selectedLocation)}
               onEditShop={onEditShop}
               onDeleteShop={onDeleteShop}
+              onSelectShop={setSelectedShopId}
               onCancelEditor={onCancelEditor}
               onSaved={onSaved}
             />
@@ -627,7 +660,7 @@ function DmCampaignBrowser({
         </div>
 
         <footer className="campaign-browser-footer">
-          Press <kbd>Esc</kbd> to {editor ? 'cancel editing' : selectedLocation ? 'return to the campaign' : 'close'}.
+          Press <kbd>Esc</kbd> to {selectedShop ? 'return to the location' : editor ? 'cancel editing' : selectedLocation ? 'return to the campaign' : 'close'}.
         </footer>
       </section>
     </div>
@@ -738,6 +771,7 @@ function DmLocationLayer({
   onDeleteLocation,
   onEditShop,
   onDeleteShop,
+  onSelectShop,
   onCancelEditor,
   onSaved,
 }: {
@@ -749,6 +783,7 @@ function DmLocationLayer({
   onDeleteLocation: () => void
   onEditShop: (shop: Shop) => void
   onDeleteShop: (shop: Shop) => void
+  onSelectShop: (shopId: string) => void
   onCancelEditor: () => void
   onSaved: () => Promise<void>
 }) {
@@ -835,11 +870,12 @@ function DmLocationLayer({
             const editing = editor?.type === 'shop' && editor.shop?.id === shop.id
             return (
               <div className="dm-browser-card-wrap shop-management-card" key={shop.id}>
-                <article className="browser-entity-card">
+                <button className="browser-entity-card" type="button" onClick={() => onSelectShop(shop.id)}>
                   <span className="classification-badge shop-classification">{titleCase(shop.classification)}</span>
                   <strong>{shop.name}</strong>
                   <span>{shop.description || 'No shop description has been provided.'}</span>
-                </article>
+                  <small>Enter shop →</small>
+                </button>
                 <div className="dm-card-actions">
                   <button className="text-button add-button" type="button" disabled={Boolean(generating)} onClick={() => void generateShop(shop)}>
                     {generating === shop.id ? 'Generating…' : 'Generate inventory'}
@@ -856,6 +892,224 @@ function DmLocationLayer({
         </div>
       )}
     </div>
+  )
+}
+
+function DmShopLayer({ shop, location }: { shop: Shop; location: Location }) {
+  const [addingManualItem, setAddingManualItem] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [message, setMessage] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
+
+  async function generateInventory() {
+    setGenerating(true)
+    setMessage('')
+    setErrorMessage('')
+    const { data, error } = await supabase.rpc('generate_shop_inventory', { target_shop_id: shop.id })
+
+    if (error || !data) {
+      console.error('Could not generate shop inventory:', error)
+      setErrorMessage(`${shop.name} could not be stocked. ${error?.message ?? ''}`.trim())
+    } else {
+      setMessage(generationSummaryText(data as ShopGenerationSummary))
+    }
+    setGenerating(false)
+  }
+
+  return (
+    <div className="browser-view dm-browser-view">
+      <div className="browser-introduction">
+        <p className="eyebrow">{titleCase(shop.classification)} shop · {titleCase(location.classification)}</p>
+        <h2>{shop.name}</h2>
+        {shop.description && <p>{shop.description}</p>}
+      </div>
+
+      <div className="dm-browser-section-heading">
+        <h3 className="browser-list-heading">Noteworthy items available</h3>
+        <div className="dm-browser-heading-actions">
+          <button className="button button-secondary button-inline" type="button" disabled={generating || addingManualItem} onClick={() => void generateInventory()}>
+            {generating ? 'Generating…' : 'Generate inventory'}
+          </button>
+          <button className="button button-primary button-inline" type="button" disabled={generating || addingManualItem} onClick={() => setAddingManualItem(true)}>
+            Add manual item
+          </button>
+        </div>
+      </div>
+
+      {message && <p className="message message-success" role="status">{message}</p>}
+      {errorMessage && <p className="message message-error" role="alert">{errorMessage}</p>}
+
+      {addingManualItem && (
+        <ManualInventoryEditor
+          shopId={shop.id}
+          onCancel={() => setAddingManualItem(false)}
+          onAdded={(displayName) => {
+            setAddingManualItem(false)
+            setMessage(`${displayName} was added as manual stock and will be preserved during regeneration.`)
+            setErrorMessage('')
+          }}
+        />
+      )}
+
+      <ShopInventory key={shop.id} shopId={shop.id} canManageManual />
+    </div>
+  )
+}
+
+function ManualInventoryEditor({
+  shopId,
+  onCancel,
+  onAdded,
+}: {
+  shopId: string
+  onCancel: () => void
+  onAdded: (displayName: string) => void
+}) {
+  const [catalogItems, setCatalogItems] = useState<ManualCatalogItem[]>([])
+  const [itemQuery, setItemQuery] = useState('')
+  const [selectedItemId, setSelectedItemId] = useState('')
+  const [displayName, setDisplayName] = useState('')
+  const [priceGp, setPriceGp] = useState('')
+  const [quantity, setQuantity] = useState('1')
+  const [isInfinite, setIsInfinite] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    let isActive = true
+    void supabase
+      .from('items')
+      .select('id, name, classification, rarity, price_mode, fixed_price_cp')
+      .eq('is_active', true)
+      .order('name')
+      .then((result) => {
+        if (!isActive) return
+        if (result.error) {
+          console.error('Could not load manual inventory catalog:', result.error)
+          setMessage('The item catalog could not be loaded.')
+        } else {
+          setCatalogItems(result.data ?? [])
+        }
+        setLoading(false)
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [])
+
+  function chooseCatalogItem(value: string) {
+    setItemQuery(value)
+    const selected = catalogItems.find((item) => item.name.toLowerCase() === value.trim().toLowerCase())
+    setSelectedItemId(selected?.id ?? '')
+    if (!selected) return
+    setDisplayName(selected.name)
+    setPriceGp(selected.fixed_price_cp === null ? '' : formatGpFromCopper(selected.fixed_price_cp))
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const selectedItem = catalogItems.find((item) => item.id === selectedItemId)
+    const numericPrice = Number(priceGp)
+    const numericQuantity = Number(quantity)
+
+    if (!selectedItem) {
+      setMessage('Choose an item from the catalog suggestions.')
+      return
+    }
+    if (!displayName.trim() || displayName.trim().length > 240) {
+      setMessage('Enter a display name up to 240 characters.')
+      return
+    }
+    if (priceGp.trim() === '' || !Number.isFinite(numericPrice) || numericPrice < 0 || Math.round(numericPrice * 100) > Number.MAX_SAFE_INTEGER) {
+      setMessage('Enter a valid nonnegative price in gold pieces.')
+      return
+    }
+    if (!Number.isInteger(numericQuantity) || numericQuantity < 1) {
+      setMessage('Quantity must be a whole number of at least 1.')
+      return
+    }
+
+    setSubmitting(true)
+    setMessage('')
+    const { error } = await supabase.from('shop_inventory').insert({
+      shop_id: shopId,
+      item_id: selectedItem.id,
+      display_name: displayName.trim(),
+      rarity: selectedItem.rarity,
+      price_cp: Math.round(numericPrice * 100),
+      quantity: numericQuantity,
+      is_infinite: isInfinite,
+      source: 'manual',
+    })
+
+    if (error) {
+      console.error('Could not add manual inventory:', error)
+      setMessage('The manual inventory item could not be added.')
+      setSubmitting(false)
+      return
+    }
+
+    onAdded(displayName.trim())
+    setSubmitting(false)
+  }
+
+  return (
+    <form className="entity-editor nested-entity-editor manual-inventory-editor" onSubmit={submit}>
+      <div className="editor-heading">
+        <div>
+          <p className="eyebrow">Manual stock</p>
+          <h3>Add an item</h3>
+        </div>
+        <button className="text-button" type="button" onClick={onCancel}>Cancel</button>
+      </div>
+
+      <div>
+        <label htmlFor="manual-catalog-item">Catalog item</label>
+        <input
+          id="manual-catalog-item"
+          list="manual-catalog-items"
+          value={itemQuery}
+          onChange={(event) => chooseCatalogItem(event.target.value)}
+          placeholder={loading ? 'Loading catalog…' : 'Type an item name'}
+          autoComplete="off"
+          disabled={loading}
+          required
+        />
+        <datalist id="manual-catalog-items">
+          {catalogItems.map((item) => <option value={item.name} key={item.id}>{titleCase(item.classification)} · {titleCase(item.rarity)}</option>)}
+        </datalist>
+        <p className="field-hint">Generic items can be given a resolved name below, such as “+2 Breastplate.”</p>
+      </div>
+
+      <div>
+        <label htmlFor="manual-display-name">Displayed item name</label>
+        <input id="manual-display-name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} maxLength={240} required />
+      </div>
+
+      <div className="form-grid two-columns">
+        <div>
+          <label htmlFor="manual-price">Price (gp)</label>
+          <input id="manual-price" type="number" min="0" step="0.01" value={priceGp} onChange={(event) => setPriceGp(event.target.value)} required />
+        </div>
+        <div>
+          <label htmlFor="manual-quantity">Quantity</label>
+          <input id="manual-quantity" type="number" min="1" step="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} disabled={isInfinite} required />
+        </div>
+      </div>
+
+      <label className="checkbox-field">
+        <input type="checkbox" checked={isInfinite} onChange={(event) => setIsInfinite(event.target.checked)} />
+        <span>Infinite stock</span>
+      </label>
+
+      {message && <p className="message message-error" role="alert">{message}</p>}
+      <div className="editor-actions">
+        <button className="button button-secondary" type="button" onClick={onCancel}>Cancel</button>
+        <button className="button button-primary button-inline" type="submit" disabled={loading || submitting}>{submitting ? 'Adding…' : 'Add to shop'}</button>
+      </div>
+    </form>
   )
 }
 
@@ -1118,7 +1372,7 @@ function validateText(name: string, description: string, maxNameLength: number) 
 }
 
 function titleCase(value: string) {
-  return value.charAt(0).toUpperCase() + value.slice(1)
+  return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
 
 function generationSummaryText(summary: ShopGenerationSummary) {
@@ -1127,6 +1381,10 @@ function generationSummaryText(summary: ShopGenerationSummary) {
     ? ` plus ${summary.infinite_count} infinite healing ${summary.infinite_count === 1 ? 'stock entry' : 'stock entries'}`
     : ''
   return `${summary.shop_name} was restocked with ${noteworthyCount} noteworthy ${noteworthyCount === 1 ? 'item' : 'items'}${infiniteText}. ${summary.rejected_count} ${summary.rejected_count === 1 ? 'slot was' : 'slots were'} left empty.`
+}
+
+function formatGpFromCopper(copperPieces: number) {
+  return (copperPieces / 100).toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')
 }
 
 function formatRequestDate(value: string) {

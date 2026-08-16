@@ -1452,60 +1452,56 @@ textarea:focus {
   font-weight: 800;
 }
 
-.inventory-item-details {
-  margin-top: 15px;
-  padding-top: 13px;
-  border-top: 1px solid #cfbc93;
-}
-
-.inventory-item-details summary {
-  color: #704328;
-  font-size: 0.82rem;
-  font-weight: 850;
-  cursor: pointer;
-}
-
-.inventory-item-details p {
-  margin: 12px 0 0;
-  line-height: 1.55;
-  white-space: pre-wrap;
-}
-
-.spell-tooltip {
-  position: relative;
+.inventory-tooltip-trigger {
   cursor: help;
 }
 
-.spell-tooltip-content {
-  width: min(360px, 75vw);
-  max-height: 260px;
+.inventory-cursor-tooltip {
+  width: min(390px, calc(100vw - 20px));
+  max-height: 270px;
   padding: 14px;
-  position: absolute;
-  z-index: 5;
-  left: 0;
-  bottom: calc(100% + 9px);
-  display: none;
+  position: fixed;
+  z-index: 10000;
+  display: block;
   overflow-y: auto;
+  pointer-events: none;
   border: 1px solid #ad9362;
   border-radius: 8px;
   background: #211a13;
   color: #eee2c9;
+  font-size: 0.78rem;
   font-weight: 500;
   line-height: 1.5;
   white-space: pre-wrap;
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
 }
 
-.spell-tooltip-content strong {
+.inventory-cursor-tooltip strong {
   display: block;
   margin-bottom: 7px;
   color: #e0bd6e;
 }
 
-.spell-tooltip:hover .spell-tooltip-content,
-.spell-tooltip:focus .spell-tooltip-content,
-.spell-tooltip:focus-within .spell-tooltip-content {
-  display: block;
+.inventory-remove-button {
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: #ead0c7;
+  color: #8a352d;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.inventory-remove-button:hover,
+.inventory-remove-button:focus-visible {
+  background: #dcb5aa;
+}
+
+.inventory-remove-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
 }
 
 .inventory-footnote {
@@ -1619,13 +1615,21 @@ textarea:focus {
 }
 
 .shop-management-card > .browser-entity-card {
-  cursor: default;
+  cursor: pointer;
 }
 
 .shop-management-card > .browser-entity-card:hover {
-  transform: none;
-  border-color: #927a50;
-  background: #f4ecd8;
+  transform: translateY(-2px);
+  border-color: #c7a45f;
+  background: #fff7e6;
+}
+
+.manual-inventory-editor {
+  margin: 18px 0 22px;
+  padding: 20px;
+  border-color: #9e875e;
+  background: #efe3ca;
+  color: #3d2c20;
 }
 
 .dm-browser-card-wrap > .entity-editor {
