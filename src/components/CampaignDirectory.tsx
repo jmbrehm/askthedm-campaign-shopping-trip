@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { CampaignBrowser } from './CampaignBrowser'
 
 type MembershipStatus = 'pending' | 'accepted' | 'rejected'
 
@@ -20,6 +21,7 @@ export function CampaignDirectory({ selectedCharacterId }: { selectedCharacterId
   const [memberships, setMemberships] = useState<Membership[]>([])
   const [loading, setLoading] = useState(true)
   const [submittingCampaignId, setSubmittingCampaignId] = useState<string | null>(null)
+  const [openCampaign, setOpenCampaign] = useState<Campaign | null>(null)
   const [message, setMessage] = useState('')
 
   const fetchDirectory = useCallback(async () => {
@@ -161,7 +163,8 @@ export function CampaignDirectory({ selectedCharacterId }: { selectedCharacterId
   }
 
   return (
-    <section className="campaign-directory" aria-labelledby="campaign-directory-heading">
+    <>
+      <section className="campaign-directory" aria-labelledby="campaign-directory-heading">
       <div className="section-heading-row">
         <div>
           <p className="eyebrow">Available adventures</p>
@@ -210,7 +213,13 @@ export function CampaignDirectory({ selectedCharacterId }: { selectedCharacterId
                     className={buttonState.className}
                     type="button"
                     disabled={buttonState.disabled || submittingCampaignId === campaign.id}
-                    onClick={() => void requestToJoin(campaign.id)}
+                    onClick={() => {
+                      if (membership?.status === 'accepted') {
+                        setOpenCampaign(campaign)
+                      } else {
+                        void requestToJoin(campaign.id)
+                      }
+                    }}
                   >
                     {submittingCampaignId === campaign.id ? 'Sending request…' : buttonState.label}
                   </button>
@@ -229,7 +238,11 @@ export function CampaignDirectory({ selectedCharacterId }: { selectedCharacterId
           })}
         </div>
       )}
-    </section>
+      </section>
+      {openCampaign && (
+        <CampaignBrowser campaign={openCampaign} onClose={() => setOpenCampaign(null)} />
+      )}
+    </>
   )
 }
 
@@ -243,7 +256,7 @@ function getJoinButtonState(status: MembershipStatus | undefined, hasCharacter: 
   }
 
   if (status === 'accepted') {
-    return { label: 'Campaign joined', disabled: true, className: 'button directory-join-button accepted' }
+    return { label: 'Enter campaign', disabled: false, className: 'button directory-join-button accepted' }
   }
 
   if (status === 'rejected') {
