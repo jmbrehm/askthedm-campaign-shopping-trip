@@ -133,17 +133,23 @@ function Dashboard({
       ) : profile ? (
         <>
           <div className="card dashboard-card">
-            <p className="eyebrow">Signed in</p>
-            <h1>Welcome, {profile.username}</h1>
-            <p className="description">
-              {profile.is_admin
-                ? 'Manage your adventurers here. Campaign management is coming next.'
-                : 'Create an adventurer to prepare for campaign invitations and shopping trips.'}
-            </p>
+            <div>
+              <p className="eyebrow">Signed in as</p>
+              <h1>{profile.username}</h1>
+            </div>
             <div className="role-badge">{profile.is_admin ? 'DM / Administrator' : 'Player'}</div>
           </div>
-          <CharacterManager userId={userId} />
-          {profile.is_admin && <CampaignManager userId={userId} />}
+
+          <div className={profile.is_admin ? 'dashboard-workspace admin-workspace' : 'dashboard-workspace player-workspace'}>
+            <div className={profile.is_admin ? 'dashboard-column' : 'player-dashboard-content'}>
+              <CharacterManager userId={userId} />
+            </div>
+            {profile.is_admin && (
+              <div className="dashboard-column">
+                <CampaignManager userId={userId} />
+              </div>
+            )}
+          </div>
         </>
       ) : (
         <p className="loading-line">Loading your account…</p>
