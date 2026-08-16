@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import type { Session } from '@supabase/supabase-js'
+import { CampaignManager } from './components/CampaignManager'
 import { CharacterManager } from './components/CharacterManager'
 import { normalizeUsername, usernameToAuthEmail, validateUsername } from './lib/auth'
 import { supabase } from './lib/supabase'
@@ -142,6 +143,7 @@ function Dashboard({
             <div className="role-badge">{profile.is_admin ? 'DM / Administrator' : 'Player'}</div>
           </div>
           <CharacterManager userId={userId} />
+          {profile.is_admin && <CampaignManager userId={userId} />}
         </>
       ) : (
         <p className="loading-line">Loading your account…</p>
