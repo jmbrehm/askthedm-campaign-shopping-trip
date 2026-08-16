@@ -423,8 +423,8 @@ function ItemEditor({
         </div>
         <div>
           <label htmlFor="catalog-item-description">Description</label>
-          <textarea id="catalog-item-description" value={draft.description} onChange={(event) => update('description', event.target.value)} maxLength={4000} rows={4} />
-          <span className="character-counter">{draft.description.length}/4000</span>
+          <textarea id="catalog-item-description" value={draft.description} onChange={(event) => update('description', event.target.value)} maxLength={12000} rows={4} />
+          <span className="character-counter">{draft.description.length}/12000</span>
         </div>
       </div>
 
@@ -703,7 +703,7 @@ function itemToDraft(item: CatalogItem | null, spellRule: SpellRule | null, equi
 
 function validateDraft(draft: DraftItem) {
   if (!draft.name.trim() || draft.name.trim().length > 160) return 'Enter an item name up to 160 characters.'
-  if (draft.description.length > 4000) return 'Item descriptions cannot exceed 4,000 characters.'
+  if (draft.description.length > 12000) return 'Item descriptions cannot exceed 12,000 characters.'
   const template = draft.generated_name_template.trim()
   if (!template || template.length > 240) return 'Enter a generated name template up to 240 characters.'
   if (draft.spell_rule) {
@@ -777,7 +777,7 @@ function validateImportCsv(text: string, fileName: string): ParsedImport {
     const rowErrors: string[] = []
 
     if (!name || name.length > 160) rowErrors.push('name must contain 1–160 characters')
-    if ((record.description ?? '').length > 4000) rowErrors.push('description exceeds 4,000 characters')
+    if ((record.description ?? '').length > 12000) rowErrors.push('description exceeds 12,000 characters')
     if (!CLASSIFICATIONS.some((option) => option.value === classification)) rowErrors.push(`invalid classification “${record.classification}”`)
     if (!rarity) rowErrors.push(`invalid rarity “${record.rarity}”`)
     if (attunement === null) rowErrors.push('requires_attunement must be true or false')
