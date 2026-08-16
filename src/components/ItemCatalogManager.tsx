@@ -5,6 +5,8 @@ type Classification = 'mundane' | 'alchemy' | 'smith' | 'magic' | 'jewelry' | 't
 type Rarity = 'common' | 'uncommon' | 'rare' | 'very_rare' | 'legendary'
 type SpellSchool = 'abjuration' | 'conjuration' | 'divination' | 'enchantment' | 'evocation' | 'illusion' | 'necromancy' | 'transmutation'
 type EquipmentKind = 'armor' | 'weapon' | 'shield' | 'ammunition'
+type ItemKind = 'standard' | 'potion' | 'scroll'
+type PriceMode = 'rarity_roll' | 'fixed' | 'manual_only'
 type CatalogMode = 'list' | 'edit' | 'import'
 
 type CatalogItem = {
@@ -16,6 +18,11 @@ type CatalogItem = {
   requires_attunement: boolean
   generated_name_template: string
   is_active: boolean
+  is_magical: boolean
+  item_kind: ItemKind
+  price_mode: PriceMode
+  fixed_price_cp: number | null
+  automatic_generation_eligible: boolean
 }
 
 type SpellRule = {
@@ -33,7 +40,8 @@ type EquipmentRule = {
   excluded_tags: string[]
 }
 
-type DraftItem = Omit<CatalogItem, 'id'> & {
+type DraftItem = Omit<CatalogItem, 'id' | 'fixed_price_cp'> & {
+  fixed_price_gp: string
   spell_rule: Omit<SpellRule, 'item_id'> | null
   equipment_rule: Omit<EquipmentRule, 'item_id'> | null
 }
@@ -45,7 +53,7 @@ type ParsedImport = {
 }
 
 const CLASSIFICATIONS: Array<{ value: Classification; label: string }> = [
-  { value: 'mundane', label: 'Mundane' },
+  { value: 'mundane', label: 'General goods' },
   { value: 'alchemy', label: 'Alchemy' },
   { value: 'smith', label: 'Smith' },
   { value: 'magic', label: 'Magic' },
@@ -69,6 +77,18 @@ const SPELL_SCHOOLS: SpellSchool[] = [
 
 const EQUIPMENT_KINDS: EquipmentKind[] = ['armor', 'weapon', 'shield', 'ammunition']
 
+const ITEM_KINDS: Array<{ value: ItemKind; label: string }> = [
+  { value: 'standard', label: 'Standard item' },
+  { value: 'potion', label: 'Potion (1d4 units)' },
+  { value: 'scroll', label: 'Scroll (1d2 units)' },
+]
+
+const PRICE_MODES: Array<{ value: PriceMode; label: string }> = [
+  { value: 'rarity_roll', label: 'Rarity price roll' },
+  { value: 'fixed', label: 'Fixed price' },
+  { value: 'manual_only', label: 'DM-priced / manual only' },
+]
+
 const EMPTY_DRAFT: DraftItem = {
   name: '',
   description: '',
@@ -77,12 +97,18 @@ const EMPTY_DRAFT: DraftItem = {
   requires_attunement: false,
   generated_name_template: '{item_name}',
   is_active: true,
+  is_magical: true,
+  item_kind: 'standard',
+  price_mode: 'rarity_roll',
+  fixed_price_gp: '',
+  automatic_generation_eligible: true,
   spell_rule: null,
   equipment_rule: null,
 }
 
 const CSV_HEADERS = [
   'name', 'description', 'classification', 'rarity', 'requires_attunement', 'is_active',
+  'is_magical', 'item_kind', 'price_mode', 'fixed_price_gp', 'automatic_generation_eligible',
   'generated_name_template', 'spell_minimum_level', 'spell_maximum_level', 'spell_schools',
   'equipment_kinds', 'equipment_categories', 'equipment_required_tags', 'equipment_excluded_tags',
 ]
@@ -102,7 +128,7 @@ export function ItemCatalogManager({ userId, onClose }: { userId: string; onClos
     const [itemResult, spellRuleResult, equipmentRuleResult] = await Promise.all([
       supabase
         .from('items')
-        .select('id, name, description, classification, rarity, requires_attunement, generated_name_template, is_active')
+        .select('id, name, description, classification, rarity, requires_attunement, generated_name_template, is_active, is_magical, item_kind, price_mode, fixed_price_cp, automatic_generation_eligible')
         .order('name'),
       supabase
         .from('item_spell_generation_rules')
@@ -306,13 +332,17 @@ export function ItemCatalogManager({ userId, onClose }: { userId: string; onClos
                         <div className="catalog-item-copy">
                           <div className="entity-title-line">
                             <h3>{item.name}</h3>
-                            <span className="classification-badge">{labelValue(item.classification)}</span>
+                            <span className="classification-badge">{classificationLabel(item.classification)}</span>
                             <span className={`rarity-badge rarity-${item.rarity}`}>{labelValue(item.rarity)}</span>
                             <span className={item.is_active ? 'visibility-badge listed' : 'visibility-badge'}>{item.is_active ? 'Active' : 'Inactive'}</span>
                           </div>
                           {item.description && <p>{item.description}</p>}
                           <div className="catalog-item-flags">
                             {item.requires_attunement && <span>Requires attunement</span>}
+                            <span>{item.is_magical ? 'Magical' : 'Mundane'}</span>
+                            <span>{ITEM_KINDS.find((option) => option.value === item.item_kind)?.label ?? labelValue(item.item_kind)}</span>
+                            <span>{priceDescription(item)}</span>
+                            {!item.automatic_generation_eligible && <span>Manual stock only</span>}
                             {hasSpellRule && <span>Chooses a spell</span>}
                             {hasEquipmentRule && <span>Chooses equipment</span>}
                             {item.generated_name_template !== '{item_name}' && <span>{item.generated_name_template}</span>}
@@ -380,6 +410,11 @@ function ItemEditor({
       requires_attunement: draft.requires_attunement,
       generated_name_template: draft.generated_name_template.trim(),
       is_active: draft.is_active,
+      is_magical: draft.is_magical,
+      item_kind: draft.item_kind,
+      price_mode: draft.price_mode,
+      fixed_price_cp: fixedPriceCp(draft),
+      automatic_generation_eligible: draft.automatic_generation_eligible,
       ...(!item ? { created_by: userId } : {}),
     }
 
@@ -437,22 +472,85 @@ function ItemEditor({
         </div>
         <div>
           <label htmlFor="catalog-rarity">Rarity</label>
-          <select id="catalog-rarity" value={draft.rarity} onChange={(event) => update('rarity', event.target.value as Rarity)}>
+          <select
+            id="catalog-rarity"
+            value={draft.rarity}
+            onChange={(event) => {
+              const rarity = event.target.value as Rarity
+              setDraft((current) => ({
+                ...current,
+                rarity,
+                automatic_generation_eligible: rarity === 'legendary' ? false : current.automatic_generation_eligible,
+              }))
+            }}
+          >
             {RARITIES.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
           </select>
         </div>
       </div>
 
+      <div className="form-grid two-columns">
+        <div>
+          <label htmlFor="catalog-item-kind">Item kind</label>
+          <select id="catalog-item-kind" value={draft.item_kind} onChange={(event) => update('item_kind', event.target.value as ItemKind)}>
+            {ITEM_KINDS.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
+          </select>
+          <p className="field-hint">Controls the quantity created when this item is generated.</p>
+        </div>
+        <div>
+          <label htmlFor="catalog-price-mode">Pricing</label>
+          <select
+            id="catalog-price-mode"
+            value={draft.price_mode}
+            onChange={(event) => {
+              const priceMode = event.target.value as PriceMode
+              setDraft((current) => ({
+                ...current,
+                price_mode: priceMode,
+                fixed_price_gp: priceMode === 'fixed' ? current.fixed_price_gp : '',
+                automatic_generation_eligible: priceMode === 'manual_only' ? false : current.automatic_generation_eligible,
+              }))
+            }}
+          >
+            {PRICE_MODES.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
+          </select>
+          <p className="field-hint">Rarity rolls use the campaign pricing table; manual-only items require the DM to choose a price.</p>
+        </div>
+      </div>
+
+      {draft.price_mode === 'fixed' && (
+        <div>
+          <label htmlFor="catalog-fixed-price">Fixed price (gp)</label>
+          <input id="catalog-fixed-price" type="number" min="0" step="0.01" value={draft.fixed_price_gp} onChange={(event) => update('fixed_price_gp', event.target.value)} required />
+        </div>
+      )}
+
       <div className="checkbox-grid catalog-status-options">
+        <label className="checkbox-field">
+          <input type="checkbox" checked={draft.is_magical} onChange={(event) => update('is_magical', event.target.checked)} />
+          <span>Magical item</span>
+        </label>
         <label className="checkbox-field">
           <input type="checkbox" checked={draft.requires_attunement} onChange={(event) => update('requires_attunement', event.target.checked)} />
           <span>Requires attunement</span>
         </label>
         <label className="checkbox-field">
           <input type="checkbox" checked={draft.is_active} onChange={(event) => update('is_active', event.target.checked)} />
-          <span>Active in generation pool</span>
+          <span>Active catalog entry</span>
+        </label>
+        <label className="checkbox-field">
+          <input
+            type="checkbox"
+            checked={draft.automatic_generation_eligible}
+            disabled={draft.rarity === 'legendary' || draft.price_mode === 'manual_only'}
+            onChange={(event) => update('automatic_generation_eligible', event.target.checked)}
+          />
+          <span>Eligible for automatic shop generation</span>
         </label>
       </div>
+      {(draft.rarity === 'legendary' || draft.price_mode === 'manual_only') && (
+        <p className="field-hint">Legendary and DM-priced items can be stocked manually, but are excluded from automatic generation.</p>
+      )}
 
       <fieldset className="catalog-rule-fieldset">
         <legend>Generated identity</legend>
@@ -650,7 +748,7 @@ function CsvImporter({
                     <tr key={row.name.toLowerCase()}>
                       <td>{existingNames.has(row.name.trim().toLowerCase()) ? 'Update' : 'Create'}</td>
                       <td>{row.name}</td>
-                      <td>{labelValue(row.classification)}</td>
+                      <td>{classificationLabel(row.classification)}</td>
                       <td>{labelValue(row.rarity)}</td>
                       <td>{row.generated_name_template}</td>
                     </tr>
@@ -687,6 +785,7 @@ function itemToDraft(item: CatalogItem | null, spellRule: SpellRule | null, equi
   if (!item) return { ...EMPTY_DRAFT }
   return {
     ...item,
+    fixed_price_gp: item.fixed_price_cp === null ? '' : formatGp(item.fixed_price_cp),
     spell_rule: spellRule ? {
       minimum_spell_level: spellRule.minimum_spell_level,
       maximum_spell_level: spellRule.maximum_spell_level,
@@ -706,6 +805,14 @@ function validateDraft(draft: DraftItem) {
   if (draft.description.length > 12000) return 'Item descriptions cannot exceed 12,000 characters.'
   const template = draft.generated_name_template.trim()
   if (!template || template.length > 240) return 'Enter a generated name template up to 240 characters.'
+  if (draft.price_mode === 'fixed') {
+    const price = Number(draft.fixed_price_gp)
+    if (draft.fixed_price_gp.trim() === '' || !Number.isFinite(price) || price < 0 || Math.round(price * 100) > Number.MAX_SAFE_INTEGER) {
+      return 'Enter a valid nonnegative fixed price in gold pieces.'
+    }
+  }
+  if (draft.price_mode === 'manual_only' && draft.automatic_generation_eligible) return 'DM-priced items cannot be automatically generated.'
+  if (draft.rarity === 'legendary' && draft.automatic_generation_eligible) return 'Legendary items cannot be automatically generated.'
   if (draft.spell_rule) {
     if (!template.includes('{spell_name}')) return 'Spell-generating items must include {spell_name} in their name template.'
     if (draft.spell_rule.minimum_spell_level < 0 || draft.spell_rule.maximum_spell_level > 9 || draft.spell_rule.minimum_spell_level > draft.spell_rule.maximum_spell_level) {
@@ -773,7 +880,15 @@ function validateImportCsv(text: string, fileName: string): ParsedImport {
     const classification = record.classification as Classification
     const rarity = normalizeRarity(record.rarity)
     const attunement = parseBoolean(record.requires_attunement)
-    const active = record.is_active === '' ? true : parseBoolean(record.is_active)
+    const activeValue = record.is_active ?? ''
+    const magicalValue = record.is_magical ?? ''
+    const automaticValue = record.automatic_generation_eligible ?? ''
+    const active = activeValue === '' ? true : parseBoolean(activeValue)
+    const magical = magicalValue === '' ? true : parseBoolean(magicalValue)
+    const itemKind = (record.item_kind || 'standard') as ItemKind
+    const priceMode = (record.price_mode || 'rarity_roll') as PriceMode
+    const fixedPriceGp = record.fixed_price_gp ?? ''
+    const autoEligible = automaticValue === '' ? true : parseBoolean(automaticValue)
     const rowErrors: string[] = []
 
     if (!name || name.length > 160) rowErrors.push('name must contain 1–160 characters')
@@ -782,11 +897,21 @@ function validateImportCsv(text: string, fileName: string): ParsedImport {
     if (!rarity) rowErrors.push(`invalid rarity “${record.rarity}”`)
     if (attunement === null) rowErrors.push('requires_attunement must be true or false')
     if (active === null) rowErrors.push('is_active must be true or false')
+    if (magical === null) rowErrors.push('is_magical must be true or false')
+    if (!ITEM_KINDS.some((option) => option.value === itemKind)) rowErrors.push(`invalid item_kind “${record.item_kind}”`)
+    if (!PRICE_MODES.some((option) => option.value === priceMode)) rowErrors.push(`invalid price_mode “${record.price_mode}”`)
+    if (autoEligible === null) rowErrors.push('automatic_generation_eligible must be true or false')
+    if (priceMode === 'fixed' && (fixedPriceGp === '' || !Number.isFinite(Number(fixedPriceGp)) || Number(fixedPriceGp) < 0 || Math.round(Number(fixedPriceGp) * 100) > Number.MAX_SAFE_INTEGER)) rowErrors.push('fixed pricing requires a valid nonnegative fixed_price_gp')
+    if (priceMode !== 'fixed' && fixedPriceGp !== '') rowErrors.push('fixed_price_gp must be empty unless price_mode is fixed')
+    if (priceMode === 'manual_only' && autoEligible === true) rowErrors.push('manual-only items cannot be automatically generated')
+    if (rarity === 'legendary' && autoEligible === true) rowErrors.push('legendary items cannot be automatically generated')
     if (seenNames.has(normalizedName)) rowErrors.push('duplicate item name in this CSV')
     seenNames.add(normalizedName)
 
-    const minimumLevel = record.spell_minimum_level === '' ? null : Number(record.spell_minimum_level)
-    const maximumLevel = record.spell_maximum_level === '' ? null : Number(record.spell_maximum_level)
+    const minimumLevelValue = record.spell_minimum_level ?? ''
+    const maximumLevelValue = record.spell_maximum_level ?? ''
+    const minimumLevel = minimumLevelValue === '' ? null : Number(minimumLevelValue)
+    const maximumLevel = maximumLevelValue === '' ? null : Number(maximumLevelValue)
     const schools = splitList(record.spell_schools ?? '', ';') as SpellSchool[]
     const hasSpellRule = minimumLevel !== null || maximumLevel !== null || schools.length > 0
     if (hasSpellRule) {
@@ -824,6 +949,11 @@ function validateImportCsv(text: string, fileName: string): ParsedImport {
       requires_attunement: attunement as boolean,
       is_active: active as boolean,
       generated_name_template: template,
+      is_magical: magical as boolean,
+      item_kind: itemKind,
+      price_mode: priceMode,
+      fixed_price_gp: fixedPriceGp,
+      automatic_generation_eligible: autoEligible as boolean,
       spell_rule: hasSpellRule ? {
         minimum_spell_level: minimumLevel as number,
         maximum_spell_level: maximumLevel as number,
@@ -854,6 +984,11 @@ async function importDraftItems(rows: DraftItem[], userId: string) {
         requires_attunement: row.requires_attunement,
         is_active: row.is_active,
         generated_name_template: row.generated_name_template.trim(),
+        is_magical: row.is_magical,
+        item_kind: row.item_kind,
+        price_mode: row.price_mode,
+        fixed_price_cp: fixedPriceCp(row),
+        automatic_generation_eligible: row.automatic_generation_eligible,
         created_by: userId,
       })),
       { onConflict: 'normalized_name' },
@@ -926,9 +1061,10 @@ function parseCsv(text: string) {
 function downloadCsvTemplate() {
   const sampleRows = [
     CSV_HEADERS,
-    ['Cloak of Example', 'A sample static item.', 'tailored', 'uncommon', 'true', 'true', '{item_name}', '', '', '', '', '', '', ''],
-    ['Spell Scroll (3rd Level)', 'Resolves to a specific third-level spell.', 'magic', 'uncommon', 'false', 'true', 'Scroll of {spell_name}', '3', '3', '', '', '', '', ''],
-    ['+2 Armor', 'Resolves to a specific suit of armor.', 'smith', 'very_rare', 'false', 'true', '+2 {equipment_name}', '', '', '', 'armor', 'light;medium;heavy', '', ''],
+    ['Cloak of Example', 'A sample static item.', 'tailored', 'uncommon', 'true', 'true', 'true', 'standard', 'rarity_roll', '', 'true', '{item_name}', '', '', '', '', '', '', ''],
+    ['Potion of Healing', 'A fixed-price healing potion.', 'alchemy', 'common', 'false', 'true', 'true', 'potion', 'fixed', '50', 'true', '{item_name}', '', '', '', '', '', '', ''],
+    ['Spell Scroll (3rd Level)', 'Resolves to a specific third-level spell.', 'magic', 'uncommon', 'false', 'true', 'true', 'scroll', 'rarity_roll', '', 'true', 'Scroll of {spell_name}', '3', '3', '', '', '', '', ''],
+    ['+2 Armor', 'Resolves to a specific suit of armor.', 'smith', 'very_rare', 'false', 'true', 'true', 'standard', 'rarity_roll', '', 'true', '+2 {equipment_name}', '', '', '', 'armor', 'light;medium;heavy', '', ''],
   ]
   const csv = sampleRows.map((row) => row.map(csvEscape).join(',')).join('\r\n')
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
@@ -955,6 +1091,23 @@ function parseBoolean(value: string): boolean | null {
 function normalizeRarity(value: string): Rarity | null {
   const normalized = value.trim().toLowerCase().replaceAll(' ', '_').replaceAll('-', '_')
   return RARITIES.some((option) => option.value === normalized) ? normalized as Rarity : null
+}
+
+function fixedPriceCp(draft: DraftItem) {
+  return draft.price_mode === 'fixed' ? Math.round(Number(draft.fixed_price_gp) * 100) : null
+}
+
+function formatGp(copperPieces: number) {
+  return (copperPieces / 100).toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')
+}
+
+function priceDescription(item: CatalogItem) {
+  if (item.price_mode === 'fixed' && item.fixed_price_cp !== null) return `${formatGp(item.fixed_price_cp)} gp fixed`
+  return PRICE_MODES.find((option) => option.value === item.price_mode)?.label ?? labelValue(item.price_mode)
+}
+
+function classificationLabel(classification: Classification) {
+  return CLASSIFICATIONS.find((option) => option.value === classification)?.label ?? labelValue(classification)
 }
 
 function splitList(value: string, separator: string) {
