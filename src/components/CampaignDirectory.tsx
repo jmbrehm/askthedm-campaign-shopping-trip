@@ -239,8 +239,12 @@ export function CampaignDirectory({ selectedCharacterId }: { selectedCharacterId
         </div>
       )}
       </section>
-      {openCampaign && (
-        <CampaignBrowser campaign={openCampaign} onClose={() => setOpenCampaign(null)} />
+      {openCampaign && selectedCharacterId && (
+        <CampaignBrowser
+          campaign={openCampaign}
+          characterId={selectedCharacterId}
+          onClose={() => setOpenCampaign(null)}
+        />
       )}
     </>
   )

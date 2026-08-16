@@ -498,7 +498,7 @@ textarea:focus {
 
 .skill-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   margin-top: 24px;
 }
@@ -629,6 +629,10 @@ textarea:focus {
 
 .two-columns {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.three-columns {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .four-columns {
@@ -1406,6 +1410,8 @@ textarea:focus {
 
 .shop-inventory-card {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
   padding: 20px;
   border: 1px solid #9a835b;
   border-radius: 10px;
@@ -1436,6 +1442,22 @@ textarea:focus {
   white-space: nowrap;
 }
 
+.inventory-offer-price {
+  display: grid;
+  gap: 2px;
+  text-align: right;
+}
+
+.inventory-offer-price s {
+  color: #8d7b64;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.inventory-offer-price strong {
+  color: #35612f;
+}
+
 .inventory-item-meta {
   display: flex;
   flex-wrap: wrap;
@@ -1450,6 +1472,19 @@ textarea:focus {
   color: #5d452a;
   font-size: 0.72rem;
   font-weight: 800;
+}
+
+.inventory-item-meta > .offer-badge {
+  background: #cfe0c6;
+  color: #35552f;
+}
+
+.inventory-purchase-button {
+  width: 100%;
+  margin-top: auto;
+  padding: 10px 15px;
+  transform: translateY(10px);
+  font-size: 0.82rem;
 }
 
 .inventory-tooltip-trigger {
@@ -1509,6 +1544,270 @@ textarea:focus {
   color: #9f927e;
   font-size: 0.78rem;
   text-align: center;
+}
+
+.purchase-dialog-backdrop {
+  position: fixed;
+  z-index: 9000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(8, 6, 4, 0.84);
+  backdrop-filter: blur(7px);
+}
+
+.purchase-dialog {
+  width: min(780px, 100%);
+  max-height: calc(100vh - 48px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border: 1px solid #a98a50;
+  border-radius: 15px;
+  background: #eee2c9;
+  color: #3d2d21;
+  box-shadow: 0 30px 95px rgba(0, 0, 0, 0.72);
+}
+
+.purchase-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 24px;
+  border-bottom: 1px solid #6d5836;
+  background: #211a13;
+  color: #f4ecd8;
+}
+
+.purchase-dialog-header .eyebrow {
+  margin: 0 0 4px;
+}
+
+.purchase-dialog-header h2 {
+  margin: 0;
+  color: #fff5dd;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(1.55rem, 4vw, 2.35rem);
+}
+
+.purchase-dialog-body {
+  padding: 22px 24px;
+  overflow-y: auto;
+}
+
+.purchase-wallet-panel,
+.purchase-order-panel,
+.haggle-panel {
+  padding: 18px;
+  border: 1px solid #bba77f;
+  border-radius: 10px;
+  background: #fff8e8;
+}
+
+.purchase-order-panel,
+.haggle-panel {
+  margin-top: 16px;
+}
+
+.purchase-section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.purchase-section-heading h3 {
+  margin: 0;
+  color: #38281d;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.25rem;
+}
+
+.purchase-section-heading .eyebrow {
+  margin: 0 0 3px;
+}
+
+.purchase-coin-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 15px 0 0;
+}
+
+.purchase-coin-list div {
+  padding: 10px;
+  border-radius: 7px;
+  background: #e8dcc3;
+  text-align: center;
+}
+
+.purchase-coin-list dt {
+  color: #806c50;
+  font-size: 0.66rem;
+  font-weight: 850;
+}
+
+.purchase-coin-list dd {
+  margin: 4px 0 0;
+  color: #3a281b;
+  font-weight: 850;
+}
+
+.purchase-coin-list.compact {
+  margin-top: 9px;
+}
+
+.purchase-coin-list.compact div {
+  padding: 6px 8px;
+}
+
+.purchase-order-panel > label {
+  display: block;
+  margin-top: 17px;
+}
+
+.purchase-order-panel > input {
+  width: 130px;
+  margin-top: 7px;
+}
+
+.purchase-total-row,
+.wallet-after-purchase {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  margin-top: 15px;
+  padding-top: 14px;
+  border-top: 1px solid #cdbb96;
+}
+
+.purchase-total-row strong {
+  color: #714127;
+  font-size: 1.25rem;
+}
+
+.wallet-after-purchase {
+  display: grid;
+  grid-template-columns: 1fr auto;
+}
+
+.wallet-after-purchase .purchase-coin-list {
+  grid-column: 1 / -1;
+}
+
+.haggle-explanation,
+.haggle-unavailable,
+.haggle-result p {
+  margin: 13px 0 0;
+  color: #685740;
+  line-height: 1.5;
+}
+
+.haggle-skill-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 15px;
+}
+
+.haggle-skill {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 11px;
+  border: 1px solid #b9a57e;
+  border-radius: 8px;
+  background: #eadfc8;
+  cursor: pointer;
+}
+
+.haggle-skill.selected {
+  border-color: #8b6b35;
+  background: #dfc992;
+  box-shadow: inset 0 0 0 1px #8b6b35;
+}
+
+.haggle-skill input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.haggle-traits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.haggle-traits span {
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #d9c69a;
+  color: #5b452b;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.haggle-button {
+  width: 100%;
+  margin-top: 15px;
+}
+
+.successful-offer {
+  color: #3f6b37;
+}
+
+.haggle-result {
+  margin-top: 15px;
+  padding: 15px;
+  border: 1px solid #b7a37d;
+  border-radius: 8px;
+  background: #eee1c7;
+}
+
+.haggle-result.haggle-success {
+  border-color: #86a078;
+  background: #e0ead9;
+}
+
+.haggle-result.haggle-offended {
+  border-color: #b96f64;
+  background: #f1d9d3;
+}
+
+.haggle-result-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.roll-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 11px;
+}
+
+.roll-breakdown span,
+.roll-breakdown strong {
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.58);
+  font-size: 0.76rem;
+}
+
+.purchase-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #bba77f;
+  background: #e2d3b5;
 }
 
 .campaign-browser-footer {
@@ -2093,6 +2392,45 @@ textarea:focus {
 }
 
 @media (max-width: 480px) {
+  .purchase-dialog-backdrop {
+    padding: 0;
+  }
+
+  .purchase-dialog {
+    width: 100%;
+    height: 100vh;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .purchase-dialog-header,
+  .purchase-dialog-body,
+  .purchase-dialog-actions {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .purchase-section-heading,
+  .haggle-result-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .haggle-skill-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .purchase-dialog-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .purchase-dialog-actions .button {
+    width: 100%;
+  }
+
   .app-shell {
     padding: 18px 15px 40px;
   }
@@ -2135,6 +2473,7 @@ textarea:focus {
   }
 
   .two-columns,
+  .three-columns,
   .four-columns {
     grid-template-columns: 1fr;
   }

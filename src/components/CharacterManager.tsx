@@ -6,6 +6,7 @@ type Character = {
   name: string
   persuasion_bonus: number
   deception_bonus: number
+  intimidation_bonus: number
   has_guidance: boolean
   has_advantage: boolean
   has_reliable_talent: boolean
@@ -20,6 +21,7 @@ type CharacterDraft = {
   name: string
   persuasionBonus: string
   deceptionBonus: string
+  intimidationBonus: string
   hasGuidance: boolean
   hasAdvantage: boolean
   hasReliableTalent: boolean
@@ -33,6 +35,7 @@ const EMPTY_DRAFT: CharacterDraft = {
   name: '',
   persuasionBonus: '0',
   deceptionBonus: '0',
+  intimidationBonus: '0',
   hasGuidance: false,
   hasAdvantage: false,
   hasReliableTalent: false,
@@ -67,6 +70,7 @@ export function CharacterManager({
         name,
         persuasion_bonus,
         deception_bonus,
+        intimidation_bonus,
         has_guidance,
         has_advantage,
         has_reliable_talent,
@@ -101,7 +105,7 @@ export function CharacterManager({
     }
   }, [fetchCharacters])
 
-  async function refreshCharacters() {
+  const refreshCharacters = useCallback(async () => {
     const { data, error } = await fetchCharacters()
 
     if (error) {
@@ -113,7 +117,27 @@ export function CharacterManager({
     setCharacters(data ?? [])
     setLoadError('')
     return true
-  }
+  }, [fetchCharacters])
+
+  useEffect(() => {
+    const channel = supabase
+      .channel(`character-wallet-updates-${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'characters',
+          filter: `owner_id=eq.${userId}`,
+        },
+        () => void refreshCharacters(),
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [refreshCharacters, userId])
 
   function openCreateForm() {
     setEditingCharacter(null)
@@ -266,6 +290,10 @@ function CharacterCard({
           <span>Deception</span>
           <strong>{formatModifier(character.deception_bonus)}</strong>
         </div>
+        <div>
+          <span>Intimidation</span>
+          <strong>{formatModifier(character.intimidation_bonus)}</strong>
+        </div>
       </div>
 
       <div className="trait-list" aria-label="Haggling traits">
@@ -316,6 +344,7 @@ function CharacterEditor({
     const name = draft.name.trim()
     const persuasionBonus = parseWholeNumber(draft.persuasionBonus)
     const deceptionBonus = parseWholeNumber(draft.deceptionBonus)
+    const intimidationBonus = parseWholeNumber(draft.intimidationBonus)
     const platinumPieces = parseWholeNumber(draft.platinumPieces)
     const goldPieces = parseWholeNumber(draft.goldPieces)
     const silverPieces = parseWholeNumber(draft.silverPieces)
@@ -329,6 +358,7 @@ function CharacterEditor({
     if (
       !isInRange(persuasionBonus, -50, 50)
       || !isInRange(deceptionBonus, -50, 50)
+      || !isInRange(intimidationBonus, -50, 50)
     ) {
       setMessage('Skill bonuses must be whole numbers between -50 and +50.')
       return
@@ -344,6 +374,7 @@ function CharacterEditor({
       name,
       persuasion_bonus: persuasionBonus,
       deception_bonus: deceptionBonus,
+      intimidation_bonus: intimidationBonus,
       has_guidance: draft.hasGuidance,
       has_advantage: draft.hasAdvantage,
       has_reliable_talent: draft.hasReliableTalent,
@@ -399,7 +430,7 @@ function CharacterEditor({
 
       <fieldset>
         <legend>Haggling skills</legend>
-        <div className="form-grid two-columns">
+        <div className="form-grid three-columns">
           <NumberField
             id="persuasion-bonus"
             label="Persuasion bonus"
@@ -415,6 +446,14 @@ function CharacterEditor({
             min={-50}
             max={50}
             onChange={(value) => updateDraft('deceptionBonus', value)}
+          />
+          <NumberField
+            id="intimidation-bonus"
+            label="Intimidation bonus"
+            value={draft.intimidationBonus}
+            min={-50}
+            max={50}
+            onChange={(value) => updateDraft('intimidationBonus', value)}
           />
         </div>
 
@@ -521,6 +560,7 @@ function characterToDraft(character: Character | null): CharacterDraft {
     name: character.name,
     persuasionBonus: String(character.persuasion_bonus),
     deceptionBonus: String(character.deception_bonus),
+    intimidationBonus: String(character.intimidation_bonus),
     hasGuidance: character.has_guidance,
     hasAdvantage: character.has_advantage,
     hasReliableTalent: character.has_reliable_talent,

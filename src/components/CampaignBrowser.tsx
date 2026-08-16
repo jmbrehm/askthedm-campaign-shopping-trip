@@ -26,10 +26,11 @@ type Shop = {
 
 type CampaignBrowserProps = {
   campaign: Campaign
+  characterId: string
   onClose: () => void
 }
 
-export function CampaignBrowser({ campaign, onClose }: CampaignBrowserProps) {
+export function CampaignBrowser({ campaign, characterId, onClose }: CampaignBrowserProps) {
   const [locations, setLocations] = useState<Location[]>([])
   const [shops, setShops] = useState<Shop[]>([])
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
@@ -191,7 +192,7 @@ export function CampaignBrowser({ campaign, onClose }: CampaignBrowserProps) {
           {loading ? (
             <p className="browser-loading">Opening campaign…</p>
           ) : selectedShop ? (
-            <ShopView shop={selectedShop} />
+            <ShopView shop={selectedShop} characterId={characterId} />
           ) : selectedLocation ? (
             <LocationView
               location={selectedLocation}
@@ -293,7 +294,7 @@ function LocationView({
   )
 }
 
-function ShopView({ shop }: { shop: Shop }) {
+function ShopView({ shop, characterId }: { shop: Shop; characterId: string }) {
   return (
     <div className="browser-view">
       <div className="browser-introduction">
@@ -303,7 +304,7 @@ function ShopView({ shop }: { shop: Shop }) {
       </div>
 
       <h3 className="browser-list-heading">Noteworthy items available</h3>
-      <ShopInventory key={shop.id} shopId={shop.id} />
+      <ShopInventory key={shop.id} shopId={shop.id} characterId={characterId} />
     </div>
   )
 }
