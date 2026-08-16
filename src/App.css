@@ -664,8 +664,8 @@ textarea:focus {
 
 .entity-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
   gap: 16px;
 }
 
@@ -819,9 +819,10 @@ textarea:focus {
 .entity-actions {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   flex-wrap: wrap;
   gap: 11px;
+  margin-top: 11px;
 }
 
 .add-button {
@@ -996,7 +997,6 @@ textarea:focus {
   }
 
   .entity-actions {
-    grid-column: 2;
     justify-content: flex-start;
   }
 

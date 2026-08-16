@@ -244,16 +244,16 @@ export function CampaignManager({ userId }: { userId: string }) {
                     <span className="entity-count">
                       {campaignLocations.length} {campaignLocations.length === 1 ? 'location' : 'locations'}
                     </span>
+                    <EntityActions
+                      onAdd={() => {
+                        setExpandedCampaigns((current) => new Set(current).add(campaign.id))
+                        setEditor({ type: 'location', campaignId: campaign.id })
+                      }}
+                      addLabel="Add location"
+                      onEdit={() => setEditor({ type: 'campaign', campaign })}
+                      onDelete={() => void deleteCampaign(campaign)}
+                    />
                   </div>
-                  <EntityActions
-                    onAdd={() => {
-                      setExpandedCampaigns((current) => new Set(current).add(campaign.id))
-                      setEditor({ type: 'location', campaignId: campaign.id })
-                    }}
-                    addLabel="Add location"
-                    onEdit={() => setEditor({ type: 'campaign', campaign })}
-                    onDelete={() => void deleteCampaign(campaign)}
-                  />
                 </div>
 
                 {editor?.type === 'campaign' && editor.campaign?.id === campaign.id && (
@@ -357,8 +357,8 @@ function LocationPanel({
           </div>
           {location.description && <p>{location.description}</p>}
           <span className="entity-count">{shops.length} {shops.length === 1 ? 'shop' : 'shops'}</span>
+          <EntityActions onAdd={onAddShop} addLabel="Add shop" onEdit={onEdit} onDelete={onDelete} />
         </div>
-        <EntityActions onAdd={onAddShop} addLabel="Add shop" onEdit={onEdit} onDelete={onDelete} />
       </div>
 
       {editor?.type === 'location' && editor.location?.id === location.id && (
@@ -388,8 +388,8 @@ function LocationPanel({
                     <span className="classification-badge shop-classification">{titleCase(shop.classification)}</span>
                   </div>
                   {shop.description && <p>{shop.description}</p>}
+                  <EntityActions onEdit={() => onEditShop(shop)} onDelete={() => onDeleteShop(shop)} />
                 </div>
-                <EntityActions onEdit={() => onEditShop(shop)} onDelete={() => onDeleteShop(shop)} />
               </article>
 
               {editor?.type === 'shop' && editor.shop?.id === shop.id && (
