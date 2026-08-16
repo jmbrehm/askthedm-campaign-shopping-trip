@@ -972,6 +972,32 @@ textarea:focus {
   color: #594425;
 }
 
+.location-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.location-access-badge {
+  display: inline-flex;
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.location-access-badge.accessible {
+  background: #cfe0c8;
+  color: #36552f;
+}
+
+.location-access-badge.out-of-reach {
+  background: #e7d1a5;
+  color: #714b22;
+}
+
 .shop-classification {
   background: #d8cdb6;
   color: #5c4d38;
@@ -1315,6 +1341,21 @@ textarea:focus {
   color: #cfc2ad;
   line-height: 1.62;
   white-space: pre-wrap;
+}
+
+.browser-introduction > .location-access-badge,
+.dm-browser-title-line .location-access-badge {
+  margin-top: 11px;
+}
+
+.location-access-notice {
+  margin: 25px 0 0;
+  padding: 14px 16px;
+  border: 1px solid #a98248;
+  border-radius: 8px;
+  background: rgba(157, 112, 48, 0.18);
+  color: #e9d2a4;
+  line-height: 1.5;
 }
 
 .browser-list-heading {
@@ -1967,6 +2008,30 @@ textarea:focus {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 9px;
+}
+
+.location-access-button {
+  border: 1px solid transparent;
+}
+
+.location-access-button.mark-unreachable {
+  border-color: #a98248;
+  background: #6d4a28;
+  color: #fff0d2;
+}
+
+.location-access-button.mark-unreachable:hover:not(:disabled) {
+  background: #805832;
+}
+
+.location-access-button.mark-accessible {
+  border-color: #78916d;
+  background: #46633e;
+  color: #f1f8ed;
+}
+
+.location-access-button.mark-accessible:hover:not(:disabled) {
+  background: #56784c;
 }
 
 .dm-browser-section-heading .browser-list-heading {

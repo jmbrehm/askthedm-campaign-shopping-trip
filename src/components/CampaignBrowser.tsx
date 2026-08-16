@@ -14,6 +14,7 @@ type Location = {
   name: string
   classification: string
   description: string
+  is_accessible: boolean
 }
 
 type Shop = {
@@ -56,7 +57,7 @@ export function CampaignBrowser({ campaign, characterId, onClose }: CampaignBrow
     async function loadCampaign() {
       const locationResult = await supabase
         .from('locations')
-        .select('id, campaign_id, name, classification, description')
+        .select('id, campaign_id, name, classification, description, is_accessible')
         .eq('campaign_id', campaign.id)
         .order('display_order')
         .order('name')
@@ -102,6 +103,31 @@ export function CampaignBrowser({ campaign, characterId, onClose }: CampaignBrow
 
     return () => {
       isActive = false
+    }
+  }, [campaign.id])
+
+  useEffect(() => {
+    const channel = supabase
+      .channel(`player-location-access-${campaign.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'locations',
+          filter: `campaign_id=eq.${campaign.id}`,
+        },
+        (payload) => {
+          const updatedLocation = payload.new as Location
+          setLocations((current) => current.map((location) => (
+            location.id === updatedLocation.id ? { ...location, ...updatedLocation } : location
+          )))
+        },
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(channel)
     }
   }, [campaign.id])
 
@@ -192,7 +218,7 @@ export function CampaignBrowser({ campaign, characterId, onClose }: CampaignBrow
           {loading ? (
             <p className="browser-loading">Opening campaign…</p>
           ) : selectedShop ? (
-            <ShopView shop={selectedShop} characterId={characterId} />
+            <ShopView shop={selectedShop} location={selectedLocation} characterId={characterId} />
           ) : selectedLocation ? (
             <LocationView
               location={selectedLocation}
@@ -243,7 +269,10 @@ function CampaignView({
         <div className="browser-card-list">
           {locations.map((location) => (
             <button className="browser-entity-card" type="button" key={location.id} onClick={() => onSelectLocation(location.id)}>
-              <span className="classification-badge">{location.classification}</span>
+              <div className="location-card-badges">
+                <span className="classification-badge">{location.classification}</span>
+                <LocationAccessBadge accessible={location.is_accessible} />
+              </div>
               <strong>{location.name}</strong>
               <span>{location.description || 'No location description has been provided.'}</span>
               <small>Explore location →</small>
@@ -269,8 +298,15 @@ function LocationView({
       <div className="browser-introduction">
         <p className="eyebrow">{location.classification}</p>
         <h2>{location.name}</h2>
+        <LocationAccessBadge accessible={location.is_accessible} />
         {location.description && <p>{location.description}</p>}
       </div>
+
+      {!location.is_accessible && (
+        <p className="location-access-notice" role="status">
+          This location is currently Out of Reach. Shop inventories show the party’s last-known information, and purchasing is unavailable.
+        </p>
+      )}
 
       <h3 className="browser-list-heading">Shops</h3>
       {shops.length === 0 ? (
@@ -294,7 +330,8 @@ function LocationView({
   )
 }
 
-function ShopView({ shop, characterId }: { shop: Shop; characterId: string }) {
+function ShopView({ shop, location, characterId }: { shop: Shop; location: Location | null; characterId: string }) {
+  const isAccessible = location?.is_accessible ?? true
   return (
     <div className="browser-view">
       <div className="browser-introduction">
@@ -303,8 +340,27 @@ function ShopView({ shop, characterId }: { shop: Shop; characterId: string }) {
         {shop.description && <p>{shop.description}</p>}
       </div>
 
-      <h3 className="browser-list-heading">Noteworthy items available</h3>
-      <ShopInventory key={shop.id} shopId={shop.id} characterId={characterId} />
+      {!isAccessible && (
+        <p className="location-access-notice" role="status">
+          Last-known inventory only. This location is Out of Reach, so purchases and haggling are locked.
+        </p>
+      )}
+
+      <h3 className="browser-list-heading">{isAccessible ? 'Noteworthy items available' : 'Last-known noteworthy items'}</h3>
+      <ShopInventory
+        key={`${shop.id}-${isAccessible ? 'live' : 'snapshot'}`}
+        shopId={shop.id}
+        characterId={characterId}
+        isLocationAccessible={isAccessible}
+      />
     </div>
+  )
+}
+
+function LocationAccessBadge({ accessible }: { accessible: boolean }) {
+  return (
+    <span className={accessible ? 'location-access-badge accessible' : 'location-access-badge out-of-reach'}>
+      {accessible ? 'Accessible' : 'Out of Reach'}
+    </span>
   )
 }

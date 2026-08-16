@@ -93,10 +93,12 @@ export function ShopInventory({
   shopId,
   characterId,
   canManageManual = false,
+  isLocationAccessible = true,
 }: {
   shopId: string
   characterId?: string
   canManageManual?: boolean
+  isLocationAccessible?: boolean
 }) {
   const [inventory, setInventory] = useState<InventoryRow[]>([])
   const [items, setItems] = useState<ItemReference[]>([])
@@ -114,8 +116,9 @@ export function ShopInventory({
   const [savingCorrection, setSavingCorrection] = useState(false)
 
   const loadInventory = useCallback(async () => {
+    const inventoryTable = isLocationAccessible ? 'shop_inventory' : 'location_inventory_snapshots'
     const inventoryResult = await supabase
-      .from('shop_inventory')
+      .from(inventoryTable)
       .select('id, shop_id, item_id, selected_spell_id, display_name, rarity, price_cp, quantity, is_infinite, source, stock_revision')
       .eq('shop_id', shopId)
       .order('price_cp')
@@ -139,10 +142,10 @@ export function ShopInventory({
       spellIds.length
         ? supabase.from('spells').select('id, name, rules_text').in('id', spellIds)
         : Promise.resolve({ data: [], error: null }),
-      characterId
+      characterId && isLocationAccessible
         ? supabase.from('shops').select('inventory_cycle').eq('id', shopId).single()
         : Promise.resolve({ data: { inventory_cycle: 0 }, error: null }),
-      characterId
+      characterId && isLocationAccessible
         ? supabase
             .from('characters')
             .select('id, name, persuasion_bonus, deception_bonus, intimidation_bonus, has_guidance, has_advantage, has_reliable_talent, platinum_pieces, gold_pieces, silver_pieces, copper_pieces, wallet_value_cp')
@@ -154,7 +157,7 @@ export function ShopInventory({
     const nextCycle = Number(shopResult.data?.inventory_cycle ?? 0)
     let haggleResult: { data: HaggleRecord | null; error: { message: string } | null } = { data: null, error: null }
 
-    if (characterId && !shopResult.error) {
+    if (characterId && isLocationAccessible && !shopResult.error) {
       haggleResult = await supabase
         .from('shop_character_haggles')
         .select('shop_id, character_id, inventory_cycle, inventory_id, inventory_stock_revision, skill, d20_roll_1, d20_roll_2, selected_d20, adjusted_d20, guidance_roll, skill_bonus, total_result, difficulty_class, outcome, offered_price_cp')
@@ -179,13 +182,15 @@ export function ShopInventory({
     setCharacter(characterResult.data ?? null)
     setHaggle(haggleResult.data ?? null)
     setLoading(false)
-  }, [characterId, shopId])
+  }, [characterId, isLocationAccessible, shopId])
 
   useEffect(() => {
     void Promise.resolve().then(loadInventory)
   }, [loadInventory])
 
   useEffect(() => {
+    if (!isLocationAccessible) return undefined
+
     const channel = supabase
       .channel(`shop-purchase-updates-${shopId}-${characterId ?? 'dm'}`)
       .on(
@@ -212,7 +217,7 @@ export function ShopInventory({
     return () => {
       void supabase.removeChannel(channel)
     }
-  }, [characterId, loadInventory, shopId])
+  }, [characterId, isLocationAccessible, loadInventory, shopId])
 
   const itemsById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items])
   const spellsById = useMemo(() => new Map(spells.map((spell) => [spell.id, spell])), [spells])
@@ -311,8 +316,8 @@ export function ShopInventory({
 
       {inventory.length === 0 ? (
         <div className="browser-empty-state inventory-placeholder">
-          <h4>No noteworthy items available</h4>
-          <p>This shop may still carry ordinary goods appropriate to its trade.</p>
+          <h4>{isLocationAccessible ? 'No noteworthy items available' : 'No noteworthy items in the last-known inventory'}</h4>
+          <p>{isLocationAccessible ? 'This shop may still carry ordinary goods appropriate to its trade.' : 'The party had no exceptional stock recorded for this shop when the location became Out of Reach.'}</p>
         </div>
       ) : (
         <div className="shop-inventory-list">
@@ -431,7 +436,13 @@ export function ShopInventory({
         </div>
       )}
 
-      {!character && <p className="inventory-footnote">DM inventory view · player purchase controls are hidden.</p>}
+      {!character && (
+        <p className="inventory-footnote">
+          {characterId && !isLocationAccessible
+            ? 'Last-known inventory · purchase controls are locked while this location is Out of Reach.'
+            : 'DM inventory view · player purchase controls are hidden.'}
+        </p>
+      )}
 
       {selectedInventory && selectedItem && character && createPortal(
         <PurchaseDialog

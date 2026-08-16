@@ -20,6 +20,7 @@ type Location = {
   name: string
   classification: LocationClassification
   description: string
+  is_accessible: boolean
 }
 
 type Shop = {
@@ -115,7 +116,7 @@ export function CampaignManager({ userId }: { userId: string }) {
   const fetchHierarchy = useCallback(async () => {
     const [campaignResult, locationResult, shopResult, requestResult, characterResult, profileResult] = await Promise.all([
       supabase.from('campaigns').select('id, name, description, is_listed').order('name'),
-      supabase.from('locations').select('id, campaign_id, name, classification, description').order('display_order').order('name'),
+      supabase.from('locations').select('id, campaign_id, name, classification, description, is_accessible').order('display_order').order('name'),
       supabase.from('shops').select('id, location_id, name, classification, description').order('display_order').order('name'),
       supabase
         .from('campaign_character_memberships')
@@ -764,7 +765,10 @@ function DmCampaignLayer({
             return (
               <div className="dm-browser-card-wrap" key={location.id}>
                 <button className="browser-entity-card" type="button" onClick={() => onSelectLocation(location.id)}>
-                  <span className="classification-badge">{titleCase(location.classification)}</span>
+                  <div className="location-card-badges">
+                    <span className="classification-badge">{titleCase(location.classification)}</span>
+                    <LocationAccessBadge accessible={location.is_accessible} />
+                  </div>
                   <strong>{location.name}</strong>
                   <span>{location.description || 'No location description has been provided.'}</span>
                   <small>{shopCount} {shopCount === 1 ? 'shop' : 'shops'} · Manage location →</small>
@@ -813,6 +817,39 @@ function DmLocationLayer({
   const [generating, setGenerating] = useState('')
   const [generationMessage, setGenerationMessage] = useState('')
   const [generationError, setGenerationError] = useState('')
+  const [changingAccessibility, setChangingAccessibility] = useState(false)
+
+  async function toggleAccessibility() {
+    const nextAccessible = !location.is_accessible
+    const confirmed = window.confirm(
+      nextAccessible
+        ? `Mark ${location.name} as Accessible? Players will immediately see the current live inventories and may purchase again.`
+        : `Mark ${location.name} as Out of Reach? Players will keep seeing a frozen snapshot of the current inventories, but purchasing will be locked.`,
+    )
+    if (!confirmed) return
+
+    setChangingAccessibility(true)
+    setGenerationMessage('')
+    setGenerationError('')
+    const { data, error } = await supabase.rpc('set_location_accessibility', {
+      target_location_id: location.id,
+      accessible: nextAccessible,
+    })
+
+    if (error || !data) {
+      console.error('Could not change location accessibility:', error)
+      setGenerationError(error?.message ?? `${location.name}'s accessibility could not be changed.`)
+    } else {
+      const result = data as { snapshot_count: number }
+      await onSaved()
+      setGenerationMessage(
+        nextAccessible
+          ? `${location.name} is Accessible. Players can now see current inventories and make purchases.`
+          : `${location.name} is Out of Reach. ${result.snapshot_count} last-known inventory ${result.snapshot_count === 1 ? 'entry was' : 'entries were'} frozen for players.`,
+      )
+    }
+    setChangingAccessibility(false)
+  }
 
   async function generateShop(shop: Shop) {
     setGenerating(shop.id)
@@ -853,7 +890,10 @@ function DmLocationLayer({
       <div className="browser-introduction">
         <p className="eyebrow">{titleCase(location.classification)}</p>
         <div className="dm-browser-title-line">
-          <h2>{location.name}</h2>
+          <div>
+            <h2>{location.name}</h2>
+            <LocationAccessBadge accessible={location.is_accessible} />
+          </div>
           <EntityActions onEdit={onEditLocation} onDelete={onDeleteLocation} />
         </div>
         {location.description && <p>{location.description}</p>}
@@ -867,10 +907,18 @@ function DmLocationLayer({
         <h3 className="browser-list-heading">Shops</h3>
         {!editor && (
           <div className="dm-browser-heading-actions">
-            <button className="button button-secondary button-inline" type="button" disabled={Boolean(generating) || shops.length === 0} onClick={() => void generateLocation()}>
+            <button
+              className={`button button-inline location-access-button ${location.is_accessible ? 'mark-unreachable' : 'mark-accessible'}`}
+              type="button"
+              disabled={Boolean(generating) || changingAccessibility}
+              onClick={() => void toggleAccessibility()}
+            >
+              {changingAccessibility ? 'Updating…' : location.is_accessible ? 'Mark out of reach' : 'Mark accessible'}
+            </button>
+            <button className="button button-secondary button-inline" type="button" disabled={Boolean(generating) || changingAccessibility || shops.length === 0} onClick={() => void generateLocation()}>
               {generating === location.id ? 'Generating…' : 'Generate all inventories'}
             </button>
-            <button className="button button-primary button-inline" type="button" disabled={Boolean(generating)} onClick={onAddShop}>Add shop</button>
+            <button className="button button-primary button-inline" type="button" disabled={Boolean(generating) || changingAccessibility} onClick={onAddShop}>Add shop</button>
           </div>
         )}
       </div>
@@ -1421,6 +1469,14 @@ function validateText(name: string, description: string, maxNameLength: number) 
 
 function titleCase(value: string) {
   return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function LocationAccessBadge({ accessible }: { accessible: boolean }) {
+  return (
+    <span className={accessible ? 'location-access-badge accessible' : 'location-access-badge out-of-reach'}>
+      {accessible ? 'Accessible' : 'Out of Reach'}
+    </span>
+  )
 }
 
 function generationSummaryText(summary: ShopGenerationSummary) {
