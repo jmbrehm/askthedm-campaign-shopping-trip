@@ -132,8 +132,12 @@ declare
   old_fragment text;
   new_fragment text;
 begin
-  select pg_get_functiondef('public._generate_shop_inventory(uuid)'::regprocedure)
-  into generator_definition;
+  -- pg_get_functiondef() reformats declarations, so inspect the stored
+  -- PL/pgSQL body directly. PostgreSQL preserves this source verbatim.
+  select procedure.prosrc
+  into strict generator_definition
+  from pg_catalog.pg_proc procedure
+  where procedure.oid = 'public._generate_shop_inventory(uuid)'::regprocedure;
 
   old_fragment := E'  slot_count integer := 0;\n  slot_index integer;';
   new_fragment := E'  slot_count integer := 0;\n  classification_slot_count integer := 0;\n  slot_index integer;\n  classification_record record;\n  selected_shop_classification public.catalog_item_classification;\n  slot_classifications public.catalog_item_classification[] := ''{}'';';
@@ -170,7 +174,12 @@ begin
   end if;
   generator_definition := replace(generator_definition, old_fragment, new_fragment);
 
-  execute generator_definition;
+  execute 'create or replace function public._generate_shop_inventory(target_shop_id uuid)
+    returns jsonb
+    language plpgsql
+    security definer
+    set search_path = ''''
+    as $generator$' || generator_definition || '$generator$';
 end;
 $$;
 
