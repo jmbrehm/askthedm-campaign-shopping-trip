@@ -83,6 +83,12 @@ type PurchaseResult = {
   was_haggled: boolean
 }
 
+type InventoryCorrectionDraft = {
+  priceGp: string
+  quantity: string
+  isInfinite: boolean
+}
+
 export function ShopInventory({
   shopId,
   characterId,
@@ -103,6 +109,9 @@ export function ShopInventory({
   const [message, setMessage] = useState('')
   const [purchaseMessage, setPurchaseMessage] = useState('')
   const [removingId, setRemovingId] = useState('')
+  const [editingInventoryId, setEditingInventoryId] = useState<string | null>(null)
+  const [correctionDraft, setCorrectionDraft] = useState<InventoryCorrectionDraft | null>(null)
+  const [savingCorrection, setSavingCorrection] = useState(false)
 
   const loadInventory = useCallback(async () => {
     const inventoryResult = await supabase
@@ -230,6 +239,56 @@ export function ShopInventory({
     setRemovingId('')
   }
 
+  function beginCorrection(row: InventoryRow) {
+    setEditingInventoryId(row.id)
+    setCorrectionDraft({
+      priceGp: goldInputValue(row.price_cp),
+      quantity: String(row.quantity),
+      isInfinite: row.is_infinite,
+    })
+    setMessage('')
+    setPurchaseMessage('')
+  }
+
+  function cancelCorrection() {
+    setEditingInventoryId(null)
+    setCorrectionDraft(null)
+  }
+
+  async function saveCorrection(row: InventoryRow) {
+    if (!correctionDraft) return
+    const priceCp = parseGoldInput(correctionDraft.priceGp)
+    const quantity = Number(correctionDraft.quantity)
+
+    if (priceCp === null) {
+      setMessage('Enter a valid price in gold pieces with no more than two decimal places.')
+      return
+    }
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 1_000_000) {
+      setMessage('Quantity must be a whole number between 1 and 1,000,000.')
+      return
+    }
+
+    setSavingCorrection(true)
+    setMessage('')
+    const { error } = await supabase.rpc('correct_shop_inventory', {
+      target_inventory_id: row.id,
+      corrected_price_cp: priceCp,
+      corrected_quantity: quantity,
+      corrected_is_infinite: correctionDraft.isInfinite,
+    })
+
+    if (error) {
+      console.error('Could not correct shop inventory:', error)
+      setMessage(error.message || `${row.display_name} could not be corrected.`)
+    } else {
+      cancelCorrection()
+      setPurchaseMessage(`${row.display_name} was corrected. Any outstanding offer for this stock was invalidated.`)
+      await loadInventory()
+    }
+    setSavingCorrection(false)
+  }
+
   function handlePurchased(result: PurchaseResult) {
     setSelectedInventoryId(null)
     setPurchaseMessage(
@@ -289,12 +348,69 @@ export function ShopInventory({
                   {spell && (
                     <HoverTooltip label="Spell details" title={spell.name} content={spell.rules_text || 'No spell rules text is available.'} />
                   )}
-                  {canManageManual && row.source === 'manual' && (
-                    <button className="inventory-remove-button" type="button" disabled={removingId === row.id} onClick={() => void removeManualItem(row)}>
-                      {removingId === row.id ? 'Removing…' : 'Remove'}
-                    </button>
+                  {canManageManual && (
+                    <div className="inventory-management-actions">
+                      <button className="inventory-correct-button" type="button" disabled={savingCorrection || removingId === row.id} onClick={() => beginCorrection(row)}>
+                        Correct stock
+                      </button>
+                      {row.source === 'manual' && (
+                        <button className="inventory-remove-button" type="button" disabled={removingId === row.id || savingCorrection} onClick={() => void removeManualItem(row)}>
+                          {removingId === row.id ? 'Removing…' : 'Remove'}
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
+
+                {canManageManual && editingInventoryId === row.id && correctionDraft && (
+                  <div className="inventory-correction-editor">
+                    <div className="inventory-correction-heading">
+                      <div>
+                        <p className="eyebrow">DM correction</p>
+                        <strong>Correct this stock entry</strong>
+                      </div>
+                      <button className="text-button" type="button" disabled={savingCorrection} onClick={cancelCorrection}>Cancel</button>
+                    </div>
+
+                    <div className="inventory-correction-fields">
+                      <label>
+                        Price (gp)
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={correctionDraft.priceGp}
+                          disabled={savingCorrection}
+                          onChange={(event) => setCorrectionDraft((current) => current ? { ...current, priceGp: event.target.value } : current)}
+                        />
+                      </label>
+                      <label>
+                        Quantity
+                        <input
+                          type="number"
+                          min="1"
+                          max="1000000"
+                          step="1"
+                          value={correctionDraft.quantity}
+                          disabled={savingCorrection || correctionDraft.isInfinite}
+                          onChange={(event) => setCorrectionDraft((current) => current ? { ...current, quantity: event.target.value } : current)}
+                        />
+                      </label>
+                      <label className="inventory-infinite-toggle">
+                        <input
+                          type="checkbox"
+                          checked={correctionDraft.isInfinite}
+                          disabled={savingCorrection}
+                          onChange={(event) => setCorrectionDraft((current) => current ? { ...current, isInfinite: event.target.checked } : current)}
+                        />
+                        Infinite stock
+                      </label>
+                    </div>
+
+                    <button className="button button-primary button-inline" type="button" disabled={savingCorrection} onClick={() => void saveCorrection(row)}>
+                      {savingCorrection ? 'Saving…' : 'Save correction'}
+                    </button>
+                  </div>
+                )}
 
                 {character && (
                   <button
@@ -712,6 +828,18 @@ function formatGold(copperPieces: number) {
     minimumFractionDigits: copperPieces % 100 === 0 ? 0 : 2,
     maximumFractionDigits: 2,
   }).format(copperPieces / 100)
+}
+
+function goldInputValue(copperPieces: number) {
+  return copperPieces % 100 === 0 ? String(copperPieces / 100) : (copperPieces / 100).toFixed(2)
+}
+
+function parseGoldInput(value: string) {
+  const normalized = value.trim()
+  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) return null
+  const [whole, fraction = ''] = normalized.split('.')
+  const copperPieces = Number(whole) * 100 + Number(fraction.padEnd(2, '0'))
+  return Number.isSafeInteger(copperPieces) ? copperPieces : null
 }
 
 function titleCase(value: string) {

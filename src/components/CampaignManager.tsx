@@ -999,7 +999,7 @@ function DmPurchaseHistoryLayer({ shop, location }: { shop: Shop; location: Loca
         <p>Completed purchases from {shop.name} appear here automatically.</p>
       </div>
 
-      <PurchaseLedger shopId={shop.id} showBuyer />
+      <PurchaseLedger shopId={shop.id} showBuyer canReverse />
     </div>
   )
 }

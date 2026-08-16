@@ -1529,6 +1529,106 @@ textarea:focus {
   cursor: pointer;
 }
 
+.inventory-management-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-left: auto;
+}
+
+.inventory-correct-button {
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: #d8dfc7;
+  color: #45603b;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.inventory-correct-button:hover,
+.inventory-correct-button:focus-visible {
+  background: #c3d0ad;
+}
+
+.inventory-correct-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.inventory-correction-editor {
+  display: grid;
+  gap: 15px;
+  margin-top: 17px;
+  padding: 15px;
+  border: 1px solid #b39b70;
+  border-radius: 8px;
+  background: #e8dcc3;
+}
+
+.inventory-correction-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 15px;
+}
+
+.inventory-correction-heading .eyebrow {
+  margin: 0 0 3px;
+  color: #8a6335;
+}
+
+.inventory-correction-heading strong {
+  color: #39291d;
+}
+
+.inventory-correction-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 11px;
+}
+
+.inventory-correction-fields label:not(.inventory-infinite-toggle) {
+  display: grid;
+  gap: 6px;
+  color: #66533d;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.inventory-correction-fields input[type='text'],
+.inventory-correction-fields input[type='number'] {
+  min-width: 0;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid #aa9368;
+  background: #fff8e8;
+}
+
+.inventory-infinite-toggle {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #4d3c2b;
+  font-size: 0.76rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.inventory-infinite-toggle input {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+}
+
+.inventory-correction-editor > .button {
+  justify-self: start;
+}
+
 .inventory-remove-button:hover,
 .inventory-remove-button:focus-visible {
   background: #dcb5aa;
@@ -2465,6 +2565,27 @@ textarea:focus {
   color: #5e4d39;
 }
 
+.purchase-ledger-entry.ledger-entry-reversed {
+  border-color: #9d9381;
+  background: #ded8cc;
+}
+
+.ledger-entry-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.ledger-reversed-badge {
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #8b8171;
+  color: #fff8e8;
+  font-size: 0.65rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
 .ledger-entry-heading {
   display: flex;
   align-items: flex-start;
@@ -2479,7 +2600,13 @@ textarea:focus {
   font-size: 1.15rem;
 }
 
-.ledger-entry-heading time {
+.ledger-entry-times {
+  display: grid;
+  gap: 4px;
+  text-align: right;
+}
+
+.ledger-entry-times time {
   color: #86745d;
   font-size: 0.72rem;
   white-space: nowrap;
@@ -2531,6 +2658,14 @@ textarea:focus {
   color: #416039;
 }
 
+.ledger-correction-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #cdbb96;
+}
+
 .ledger-limit-note {
   color: #9f927e;
   font-size: 0.75rem;
@@ -2570,6 +2705,20 @@ textarea:focus {
     align-items: flex-start;
     flex-direction: column;
     gap: 8px;
+  }
+
+  .ledger-entry-times {
+    text-align: left;
+  }
+
+  .inventory-correction-fields {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .inventory-correction-editor > .button,
+  .ledger-correction-actions .button {
+    width: 100%;
   }
 
   .purchase-dialog-header,

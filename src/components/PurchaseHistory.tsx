@@ -15,7 +15,9 @@ type PurchaseRow = {
   unit_price_cp: number
   total_price_cp: number
   was_haggled: boolean
+  inventory_was_infinite: boolean | null
   purchased_at: string
+  reversed_at: string | null
 }
 
 type ProfileReference = {
@@ -33,22 +35,26 @@ export function PurchaseLedger({
   characterId,
   showBuyer = false,
   showShop = false,
+  canReverse = false,
 }: {
   shopId?: string
   characterId?: string
   showBuyer?: boolean
   showShop?: boolean
+  canReverse?: boolean
 }) {
   const [purchases, setPurchases] = useState<PurchaseRow[]>([])
   const [profiles, setProfiles] = useState<ProfileReference[]>([])
   const [shops, setShops] = useState<ShopReference[]>([])
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
+  const [actionMessage, setActionMessage] = useState('')
+  const [reversingId, setReversingId] = useState('')
 
   const loadPurchases = useCallback(async () => {
     let query = supabase
       .from('shop_purchases')
-      .select('id, buyer_user_id, character_id, character_name, shop_id, display_name, rarity, quantity, original_unit_price_cp, unit_price_cp, total_price_cp, was_haggled, purchased_at')
+      .select('id, buyer_user_id, character_id, character_name, shop_id, display_name, rarity, quantity, original_unit_price_cp, unit_price_cp, total_price_cp, was_haggled, inventory_was_infinite, purchased_at, reversed_at')
       .order('purchased_at', { ascending: false })
       .limit(100)
 
@@ -103,7 +109,7 @@ export function PurchaseLedger({
       .channel(`purchase-ledger-${shopId ?? characterId ?? 'all'}`)
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'shop_purchases', ...(filter ? { filter } : {}) },
+        { event: '*', schema: 'public', table: 'shop_purchases', ...(filter ? { filter } : {}) },
         () => void loadPurchases(),
       )
       .subscribe()
@@ -115,14 +121,43 @@ export function PurchaseLedger({
 
   const profilesById = useMemo(() => new Map(profiles.map((profile) => [profile.id, profile])), [profiles])
   const shopsById = useMemo(() => new Map(shops.map((shop) => [shop.id, shop])), [shops])
-  const totalSpent = purchases.reduce((sum, purchase) => sum + purchase.total_price_cp, 0)
-  const unitsPurchased = purchases.reduce((sum, purchase) => sum + purchase.quantity, 0)
+  const activePurchases = purchases.filter((purchase) => purchase.reversed_at === null)
+  const totalSpent = activePurchases.reduce((sum, purchase) => sum + purchase.total_price_cp, 0)
+  const unitsPurchased = activePurchases.reduce((sum, purchase) => sum + purchase.quantity, 0)
+
+  async function reversePurchase(purchase: PurchaseRow) {
+    const stockAction = purchase.inventory_was_infinite
+      ? ''
+      : ` and restore ${purchase.quantity}× ${purchase.display_name} to shop stock`
+    const confirmation = `Refund ${formatGold(purchase.total_price_cp)} gp to ${purchase.character_name}${stockAction}?`
+    if (!window.confirm(confirmation)) return
+
+    setReversingId(purchase.id)
+    setMessage('')
+    setActionMessage('')
+    const { data, error } = await supabase.rpc('reverse_shop_purchase', {
+      target_purchase_id: purchase.id,
+    })
+
+    if (error || !data) {
+      console.error('Could not reverse purchase:', error)
+      setMessage(error?.message ?? 'The purchase could not be reversed.')
+    } else {
+      const result = data as { refund_cp: number; stock_restored: boolean }
+      setActionMessage(
+        `${purchase.character_name} was refunded ${formatGold(result.refund_cp)} gp.${result.stock_restored ? ' Finite stock was restored.' : ''}`,
+      )
+      await loadPurchases()
+    }
+    setReversingId('')
+  }
 
   if (loading) return <p className="browser-loading">Opening the ledger…</p>
 
   return (
     <div className="purchase-ledger">
       {message && <p className="message message-error" role="alert">{message}</p>}
+      {actionMessage && <p className="message message-success" role="status">{actionMessage}</p>}
 
       {purchases.length === 0 ? (
         <div className="browser-empty-state purchase-ledger-empty">
@@ -132,7 +167,7 @@ export function PurchaseLedger({
       ) : (
         <>
           <div className="ledger-summary" aria-label="Purchase history summary">
-            <div><strong>{purchases.length}</strong><span>{purchases.length === 1 ? 'Transaction' : 'Transactions'}</span></div>
+            <div><strong>{activePurchases.length}</strong><span>Active transactions</span></div>
             <div><strong>{unitsPurchased}</strong><span>{unitsPurchased === 1 ? 'Item purchased' : 'Items purchased'}</span></div>
             <div><strong>{formatGold(totalSpent)} gp</strong><span>Total spent</span></div>
           </div>
@@ -145,13 +180,19 @@ export function PurchaseLedger({
               const savings = Math.max(0, listedTotal - purchase.total_price_cp)
 
               return (
-                <article className="purchase-ledger-entry" key={purchase.id}>
+                <article className={purchase.reversed_at ? 'purchase-ledger-entry ledger-entry-reversed' : 'purchase-ledger-entry'} key={purchase.id}>
                   <div className="ledger-entry-heading">
                     <div>
-                      <span className={`rarity-badge rarity-${purchase.rarity}`}>{titleCase(purchase.rarity)}</span>
+                      <div className="ledger-entry-badges">
+                        <span className={`rarity-badge rarity-${purchase.rarity}`}>{titleCase(purchase.rarity)}</span>
+                        {purchase.reversed_at && <span className="ledger-reversed-badge">Reversed · refunded</span>}
+                      </div>
                       <h4>{purchase.display_name}</h4>
                     </div>
-                    <time dateTime={purchase.purchased_at}>{formatPurchaseTime(purchase.purchased_at)}</time>
+                    <div className="ledger-entry-times">
+                      <time dateTime={purchase.purchased_at}>Purchased {formatPurchaseTime(purchase.purchased_at)}</time>
+                      {purchase.reversed_at && <time dateTime={purchase.reversed_at}>Reversed {formatPurchaseTime(purchase.reversed_at)}</time>}
+                    </div>
                   </div>
 
                   <div className="ledger-entry-context">
@@ -167,7 +208,7 @@ export function PurchaseLedger({
 
                   <div className="ledger-price-row">
                     <div>
-                      <span>Paid</span>
+                      <span>{purchase.reversed_at ? 'Refunded' : 'Paid'}</span>
                       <strong>{formatGold(purchase.total_price_cp)} gp</strong>
                     </div>
                     <div>
@@ -182,6 +223,19 @@ export function PurchaseLedger({
                       </div>
                     )}
                   </div>
+
+                  {canReverse && !purchase.reversed_at && (
+                    <div className="ledger-correction-actions">
+                      <button
+                        className="button button-secondary button-inline"
+                        type="button"
+                        disabled={Boolean(reversingId) || !purchase.character_id}
+                        onClick={() => void reversePurchase(purchase)}
+                      >
+                        {reversingId === purchase.id ? 'Reversing…' : purchase.character_id ? 'Refund & reverse' : 'Character unavailable'}
+                      </button>
+                    </div>
+                  )}
                 </article>
               )
             })}
