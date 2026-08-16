@@ -139,6 +139,40 @@ export function CampaignManager({ userId }: { userId: string }) {
     }
   }, [fetchHierarchy])
 
+  useEffect(() => {
+    const channel = supabase
+      .channel('dm-campaign-membership-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'campaign_character_memberships',
+        },
+        () => {
+          void fetchHierarchy().then((result) => {
+            if (result.error) {
+              console.error('Could not apply live join-request update:', result.error)
+              return
+            }
+
+            setCampaigns(result.campaigns)
+            setLocations(result.locations)
+            setShops(result.shops)
+            setJoinRequests(result.joinRequests)
+            setRequestCharacters(result.requestCharacters)
+            setRequestProfiles(result.requestProfiles)
+            setMessage('')
+          })
+        },
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [fetchHierarchy])
+
   async function refreshHierarchy() {
     const result = await fetchHierarchy()
 

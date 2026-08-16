@@ -63,6 +63,36 @@ export function CampaignDirectory({ selectedCharacterId }: { selectedCharacterId
     }
   }, [fetchDirectory])
 
+  useEffect(() => {
+    const channel = supabase
+      .channel('player-campaign-membership-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'campaign_character_memberships',
+        },
+        () => {
+          void fetchDirectory().then((result) => {
+            if (result.error) {
+              console.error('Could not apply live campaign update:', result.error)
+              return
+            }
+
+            setCampaigns(result.campaigns)
+            setMemberships(result.memberships)
+            setMessage('')
+          })
+        },
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [fetchDirectory])
+
   async function refreshMemberships() {
     const { data, error } = await supabase
       .from('campaign_character_memberships')
