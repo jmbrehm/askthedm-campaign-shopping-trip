@@ -94,11 +94,13 @@ export function ShopInventory({
   characterId,
   canManageManual = false,
   isLocationAccessible = true,
+  isPurchaseAvailable = true,
 }: {
   shopId: string
   characterId?: string
   canManageManual?: boolean
   isLocationAccessible?: boolean
+  isPurchaseAvailable?: boolean
 }) {
   const [inventory, setInventory] = useState<InventoryRow[]>([])
   const [items, setItems] = useState<ItemReference[]>([])
@@ -142,10 +144,10 @@ export function ShopInventory({
       spellIds.length
         ? supabase.from('spells').select('id, name, rules_text').in('id', spellIds)
         : Promise.resolve({ data: [], error: null }),
-      characterId && isLocationAccessible
+      characterId && isLocationAccessible && isPurchaseAvailable
         ? supabase.from('shops').select('inventory_cycle').eq('id', shopId).single()
         : Promise.resolve({ data: { inventory_cycle: 0 }, error: null }),
-      characterId && isLocationAccessible
+      characterId && isLocationAccessible && isPurchaseAvailable
         ? supabase
             .from('characters')
             .select('id, name, persuasion_bonus, deception_bonus, intimidation_bonus, has_guidance, has_advantage, has_reliable_talent, platinum_pieces, gold_pieces, silver_pieces, copper_pieces, wallet_value_cp')
@@ -157,7 +159,7 @@ export function ShopInventory({
     const nextCycle = Number(shopResult.data?.inventory_cycle ?? 0)
     let haggleResult: { data: HaggleRecord | null; error: { message: string } | null } = { data: null, error: null }
 
-    if (characterId && isLocationAccessible && !shopResult.error) {
+    if (characterId && isLocationAccessible && isPurchaseAvailable && !shopResult.error) {
       haggleResult = await supabase
         .from('shop_character_haggles')
         .select('shop_id, character_id, inventory_cycle, inventory_id, inventory_stock_revision, skill, d20_roll_1, d20_roll_2, selected_d20, adjusted_d20, guidance_roll, skill_bonus, total_result, difficulty_class, outcome, offered_price_cp')
@@ -182,7 +184,7 @@ export function ShopInventory({
     setCharacter(characterResult.data ?? null)
     setHaggle(haggleResult.data ?? null)
     setLoading(false)
-  }, [characterId, isLocationAccessible, shopId])
+  }, [characterId, isLocationAccessible, isPurchaseAvailable, shopId])
 
   useEffect(() => {
     void Promise.resolve().then(loadInventory)
@@ -440,6 +442,8 @@ export function ShopInventory({
         <p className="inventory-footnote">
           {characterId && !isLocationAccessible
             ? 'Last-known inventory · purchase controls are locked while this location is Out of Reach.'
+            : characterId && !isPurchaseAvailable
+              ? 'Current inventory · purchase controls are locked because this location is not Nearby.'
             : 'DM inventory view · player purchase controls are hidden.'}
         </p>
       )}

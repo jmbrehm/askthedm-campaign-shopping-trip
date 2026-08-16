@@ -21,6 +21,8 @@ type Location = {
   classification: LocationClassification
   description: string
   is_accessible: boolean
+  is_nearby: boolean
+  is_always_nearby: boolean
 }
 
 type Shop = {
@@ -123,7 +125,7 @@ export function CampaignManager({ userId }: { userId: string }) {
   const fetchHierarchy = useCallback(async () => {
     const [campaignResult, locationResult, shopResult, shopClassificationResult, requestResult, characterResult, profileResult] = await Promise.all([
       supabase.from('campaigns').select('id, name, description, is_listed').order('name'),
-      supabase.from('locations').select('id, campaign_id, name, classification, description, is_accessible').order('display_order').order('name'),
+      supabase.from('locations').select('id, campaign_id, name, classification, description, is_accessible, is_nearby, is_always_nearby').order('display_order').order('name'),
       supabase.from('shops').select('id, location_id, name, classification, description').order('display_order').order('name'),
       supabase.from('shop_classifications').select('shop_id, classification, display_order').order('display_order'),
       supabase
@@ -777,6 +779,7 @@ function DmCampaignLayer({
                   <div className="location-card-badges">
                     <span className="classification-badge">{titleCase(location.classification)}</span>
                     <LocationAccessBadge accessible={location.is_accessible} />
+                    <LocationProximityBadge location={location} />
                   </div>
                   <strong>{location.name}</strong>
                   <span>{location.description || 'No location description has been provided.'}</span>
@@ -827,12 +830,13 @@ function DmLocationLayer({
   const [generationMessage, setGenerationMessage] = useState('')
   const [generationError, setGenerationError] = useState('')
   const [changingAccessibility, setChangingAccessibility] = useState(false)
+  const [changingProximity, setChangingProximity] = useState(false)
 
   async function toggleAccessibility() {
     const nextAccessible = !location.is_accessible
     const confirmed = window.confirm(
       nextAccessible
-        ? `Mark ${location.name} as Accessible? Players will immediately see the current live inventories and may purchase again.`
+        ? `Mark ${location.name} as Accessible? Players will immediately see the current live inventories.`
         : `Mark ${location.name} as Out of Reach? Players will keep seeing a frozen snapshot of the current inventories, but purchasing will be locked.`,
     )
     if (!confirmed) return
@@ -853,11 +857,37 @@ function DmLocationLayer({
       await onSaved()
       setGenerationMessage(
         nextAccessible
-          ? `${location.name} is Accessible. Players can now see current inventories and make purchases.`
+          ? `${location.name} is Accessible. Players can now see current inventories.`
           : `${location.name} is Out of Reach. ${result.snapshot_count} last-known inventory ${result.snapshot_count === 1 ? 'entry was' : 'entries were'} frozen for players.`,
       )
     }
     setChangingAccessibility(false)
+  }
+
+  async function setProximity(nearby: boolean, alwaysNearby: boolean) {
+    setChangingProximity(true)
+    setGenerationMessage('')
+    setGenerationError('')
+    const { error } = await supabase.rpc('set_location_proximity', {
+      target_location_id: location.id,
+      nearby,
+      always_nearby: nearby && alwaysNearby,
+    })
+
+    if (error) {
+      console.error('Could not change location proximity:', error)
+      setGenerationError(error.message ?? `${location.name}'s proximity could not be changed.`)
+    } else {
+      await onSaved()
+      setGenerationMessage(
+        !nearby
+          ? `${location.name} is no longer Nearby. Purchases there are unavailable.`
+          : alwaysNearby
+            ? `${location.name} is Always Nearby. It will remain available for purchases when the party travels.`
+            : `${location.name} is Nearby. It is now the campaign's regular purchase location.`,
+      )
+    }
+    setChangingProximity(false)
   }
 
   async function generateShop(shop: Shop) {
@@ -901,7 +931,10 @@ function DmLocationLayer({
         <div className="dm-browser-title-line">
           <div>
             <h2>{location.name}</h2>
-            <LocationAccessBadge accessible={location.is_accessible} />
+            <div className="location-card-badges">
+              <LocationAccessBadge accessible={location.is_accessible} />
+              <LocationProximityBadge location={location} />
+            </div>
           </div>
           <EntityActions onEdit={onEditLocation} onDelete={onDeleteLocation} />
         </div>
@@ -919,15 +952,36 @@ function DmLocationLayer({
             <button
               className={`button button-inline location-access-button ${location.is_accessible ? 'mark-unreachable' : 'mark-accessible'}`}
               type="button"
-              disabled={Boolean(generating) || changingAccessibility}
+              disabled={Boolean(generating) || changingAccessibility || changingProximity}
               onClick={() => void toggleAccessibility()}
             >
               {changingAccessibility ? 'Updating…' : location.is_accessible ? 'Mark out of reach' : 'Mark accessible'}
             </button>
-            <button className="button button-secondary button-inline" type="button" disabled={Boolean(generating) || changingAccessibility || shops.length === 0} onClick={() => void generateLocation()}>
+            <div className="location-proximity-controls">
+              <button
+                className={`button button-inline location-nearby-button ${location.is_nearby ? 'remove-nearby' : 'mark-nearby'}`}
+                type="button"
+                disabled={Boolean(generating) || changingAccessibility || changingProximity}
+                onClick={() => void setProximity(!location.is_nearby, false)}
+              >
+                {changingProximity ? 'Updating…' : location.is_nearby ? 'Remove nearby' : 'Mark nearby'}
+              </button>
+              {location.is_nearby && (
+                <label className="always-nearby-toggle">
+                  <input
+                    type="checkbox"
+                    checked={location.is_always_nearby}
+                    disabled={Boolean(generating) || changingAccessibility || changingProximity}
+                    onChange={(event) => void setProximity(true, event.target.checked)}
+                  />
+                  Always
+                </label>
+              )}
+            </div>
+            <button className="button button-secondary button-inline" type="button" disabled={Boolean(generating) || changingAccessibility || changingProximity || shops.length === 0} onClick={() => void generateLocation()}>
               {generating === location.id ? 'Generating…' : 'Generate all inventories'}
             </button>
-            <button className="button button-primary button-inline" type="button" disabled={Boolean(generating) || changingAccessibility} onClick={onAddShop}>Add shop</button>
+            <button className="button button-primary button-inline" type="button" disabled={Boolean(generating) || changingAccessibility || changingProximity} onClick={onAddShop}>Add shop</button>
           </div>
         )}
       </div>
@@ -1583,6 +1637,16 @@ function LocationAccessBadge({ accessible }: { accessible: boolean }) {
   return (
     <span className={accessible ? 'location-access-badge accessible' : 'location-access-badge out-of-reach'}>
       {accessible ? 'Accessible' : 'Out of Reach'}
+    </span>
+  )
+}
+
+function LocationProximityBadge({ location }: { location: Pick<Location, 'is_nearby' | 'is_always_nearby'> }) {
+  if (!location.is_nearby) return null
+
+  return (
+    <span className={location.is_always_nearby ? 'location-proximity-badge always-nearby' : 'location-proximity-badge nearby'}>
+      {location.is_always_nearby ? 'Always Nearby' : 'Nearby'}
     </span>
   )
 }

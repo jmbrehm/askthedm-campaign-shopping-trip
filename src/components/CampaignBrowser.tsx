@@ -15,6 +15,8 @@ type Location = {
   classification: string
   description: string
   is_accessible: boolean
+  is_nearby: boolean
+  is_always_nearby: boolean
 }
 
 type Shop = {
@@ -64,7 +66,7 @@ export function CampaignBrowser({ campaign, characterId, onClose }: CampaignBrow
     async function loadCampaign() {
       const locationResult = await supabase
         .from('locations')
-        .select('id, campaign_id, name, classification, description, is_accessible')
+        .select('id, campaign_id, name, classification, description, is_accessible, is_nearby, is_always_nearby')
         .eq('campaign_id', campaign.id)
         .order('display_order')
         .order('name')
@@ -285,6 +287,7 @@ function CampaignView({
               <div className="location-card-badges">
                 <span className="classification-badge">{location.classification}</span>
                 <LocationAccessBadge accessible={location.is_accessible} />
+                <LocationProximityBadge location={location} />
               </div>
               <strong>{location.name}</strong>
               <span>{location.description || 'No location description has been provided.'}</span>
@@ -312,6 +315,7 @@ function LocationView({
         <p className="eyebrow">{location.classification}</p>
         <h2>{location.name}</h2>
         <LocationAccessBadge accessible={location.is_accessible} />
+        <LocationProximityBadge location={location} />
         {location.description && <p>{location.description}</p>}
       </div>
 
@@ -345,6 +349,8 @@ function LocationView({
 
 function ShopView({ shop, location, characterId }: { shop: Shop; location: Location | null; characterId: string }) {
   const isAccessible = location?.is_accessible ?? true
+  const isNearby = location?.is_nearby ?? false
+  const canPurchase = isAccessible && isNearby
   return (
     <div className="browser-view">
       <div className="browser-introduction">
@@ -359,12 +365,19 @@ function ShopView({ shop, location, characterId }: { shop: Shop; location: Locat
         </p>
       )}
 
+      {isAccessible && !isNearby && (
+        <p className="location-access-notice" role="status">
+          This location is not Nearby. Its inventory is current, but purchases and haggling are unavailable until the party returns.
+        </p>
+      )}
+
       <h3 className="browser-list-heading">{isAccessible ? 'Noteworthy items available' : 'Last-known noteworthy items'}</h3>
       <ShopInventory
-        key={`${shop.id}-${isAccessible ? 'live' : 'snapshot'}`}
+        key={`${shop.id}-${isAccessible ? 'live' : 'snapshot'}-${canPurchase ? 'purchasable' : 'view-only'}`}
         shopId={shop.id}
         characterId={characterId}
         isLocationAccessible={isAccessible}
+        isPurchaseAvailable={canPurchase}
       />
     </div>
   )
@@ -402,6 +415,16 @@ function LocationAccessBadge({ accessible }: { accessible: boolean }) {
   return (
     <span className={accessible ? 'location-access-badge accessible' : 'location-access-badge out-of-reach'}>
       {accessible ? 'Accessible' : 'Out of Reach'}
+    </span>
+  )
+}
+
+function LocationProximityBadge({ location }: { location: Pick<Location, 'is_nearby' | 'is_always_nearby'> }) {
+  if (!location.is_nearby) return null
+
+  return (
+    <span className={location.is_always_nearby ? 'location-proximity-badge always-nearby' : 'location-proximity-badge nearby'}>
+      {location.is_always_nearby ? 'Always Nearby' : 'Nearby'}
     </span>
   )
 }

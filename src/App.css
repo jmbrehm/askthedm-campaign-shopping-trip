@@ -998,6 +998,26 @@ textarea:focus {
   color: #714b22;
 }
 
+.location-proximity-badge {
+  display: inline-flex;
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.location-proximity-badge.nearby {
+  background: #c9dced;
+  color: #284f70;
+}
+
+.location-proximity-badge.always-nearby {
+  background: #d7cbed;
+  color: #513a76;
+}
+
 .shop-classification {
   background: #d8cdb6;
   color: #5c4d38;
@@ -2115,6 +2135,42 @@ textarea:focus {
 
 .location-access-button.mark-accessible:hover:not(:disabled) {
   background: #56784c;
+}
+
+.location-proximity-controls {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.location-nearby-button.mark-nearby {
+  border-color: #6687a1;
+  background: #3d617c;
+  color: #f1f7fb;
+}
+
+.location-nearby-button.remove-nearby {
+  border-color: #8d7857;
+  background: #65543c;
+  color: #fff6e7;
+}
+
+.always-nearby-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #d8cab5;
+  font-size: 0.78rem;
+  font-weight: 750;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.always-nearby-toggle input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #9f83c7;
 }
 
 .dm-browser-section-heading .browser-list-heading {
