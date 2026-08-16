@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
+import { ItemCatalogManager } from './ItemCatalogManager'
 
 type LocationClassification = 'village' | 'town' | 'city' | 'metropolis'
 type ShopClassification = 'mundane' | 'alchemy' | 'smith' | 'magic' | 'jewelry' | 'tailored' | 'wondrous'
@@ -80,6 +81,7 @@ export function CampaignManager({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
   const [reviewingRequest, setReviewingRequest] = useState('')
+  const [catalogOpen, setCatalogOpen] = useState(false)
 
   const fetchHierarchy = useCallback(async () => {
     const [campaignResult, locationResult, shopResult, requestResult, characterResult, profileResult] = await Promise.all([
@@ -291,9 +293,10 @@ export function CampaignManager({ userId }: { userId: string }) {
           <h2 id="campaigns-heading">Campaign hierarchy</h2>
         </div>
         {!editor && (
-          <button className="button button-primary button-inline" type="button" onClick={() => setEditor({ type: 'campaign' })}>
-            Create campaign
-          </button>
+          <div className="section-heading-actions">
+            <button className="button button-secondary" type="button" onClick={() => setCatalogOpen(true)}>Item catalog</button>
+            <button className="button button-primary button-inline" type="button" onClick={() => setEditor({ type: 'campaign' })}>Create campaign</button>
+          </div>
         )}
       </div>
 
@@ -403,6 +406,7 @@ export function CampaignManager({ userId }: { userId: string }) {
           onSaved={finishSave}
         />
       )}
+      {catalogOpen && <ItemCatalogManager userId={userId} onClose={() => setCatalogOpen(false)} />}
     </section>
   )
 }
