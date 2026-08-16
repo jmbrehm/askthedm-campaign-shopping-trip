@@ -1400,6 +1400,99 @@ textarea:focus {
   font-weight: 800;
 }
 
+.dm-browser-title-line,
+.dm-browser-section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.dm-browser-title-line > div:first-child {
+  min-width: 0;
+}
+
+.dm-browser-title-line .entity-actions {
+  flex: 0 0 auto;
+  margin: 0 0 5px;
+}
+
+.dm-browser-title-line .text-button {
+  color: #d7bf91;
+}
+
+.dm-browser-title-line .text-button-danger {
+  color: #dd8f82;
+}
+
+.dm-browser-title-line .visibility-badge {
+  margin-top: 10px;
+}
+
+.dm-browser-section-heading {
+  margin-top: 36px;
+}
+
+.dm-browser-section-heading .browser-list-heading {
+  margin: 0;
+}
+
+.dm-browser-section-heading .button {
+  padding: 9px 14px;
+  font-size: 0.8rem;
+}
+
+.dm-browser-view > .entity-editor {
+  margin: 26px 0 0;
+}
+
+.dm-browser-view > .nested-entity-editor {
+  border-color: #9e875e;
+}
+
+.dm-browser-card-list {
+  margin-top: 17px;
+}
+
+.dm-browser-card-wrap {
+  min-width: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.dm-browser-card-wrap > .browser-entity-card {
+  width: 100%;
+  flex: 1;
+  padding-bottom: 55px;
+}
+
+.dm-card-actions {
+  position: absolute;
+  right: 21px;
+  bottom: 18px;
+  display: flex;
+  gap: 13px;
+}
+
+.shop-management-card > .browser-entity-card {
+  cursor: default;
+}
+
+.shop-management-card > .browser-entity-card:hover {
+  transform: none;
+  border-color: #927a50;
+  background: #f4ecd8;
+}
+
+.dm-browser-card-wrap > .entity-editor {
+  position: relative;
+  z-index: 2;
+  grid-column: 1 / -1;
+  width: 100%;
+  margin: 12px 0 0;
+}
+
 @media (max-width: 980px) {
   .split-workspace {
     grid-template-columns: 1fr;
@@ -1629,5 +1722,19 @@ textarea:focus {
 
   .campaign-browser-content {
     padding: 25px 17px;
+  }
+
+  .dm-browser-title-line {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .dm-browser-title-line .entity-actions {
+    margin: 0;
+  }
+
+  .dm-browser-section-heading {
+    align-items: center;
   }
 }

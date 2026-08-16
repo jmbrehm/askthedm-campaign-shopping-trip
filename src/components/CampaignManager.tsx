@@ -74,8 +74,8 @@ export function CampaignManager({ userId }: { userId: string }) {
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([])
   const [requestCharacters, setRequestCharacters] = useState<RequestCharacter[]>([])
   const [requestProfiles, setRequestProfiles] = useState<RequestProfile[]>([])
-  const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set())
-  const [expandedLocations, setExpandedLocations] = useState<Set<string>>(new Set())
+  const [openCampaignId, setOpenCampaignId] = useState<string | null>(null)
+  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
   const [editor, setEditor] = useState<EditorState>(null)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
@@ -192,17 +192,6 @@ export function CampaignManager({ userId }: { userId: string }) {
     return true
   }
 
-  function toggleExpanded(id: string, entity: 'campaign' | 'location') {
-    const setter = entity === 'campaign' ? setExpandedCampaigns : setExpandedLocations
-
-    setter((current) => {
-      const next = new Set(current)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
   async function deleteCampaign(campaign: Campaign) {
     const confirmed = window.confirm(
       `Delete the campaign “${campaign.name}”? All of its locations, shops, and membership requests will also be deleted. This cannot be undone.`,
@@ -210,7 +199,8 @@ export function CampaignManager({ userId }: { userId: string }) {
     if (!confirmed) return
 
     const { error } = await supabase.from('campaigns').delete().eq('id', campaign.id)
-    await handleDeleteResult(error, `${campaign.name} could not be deleted.`)
+    const deleted = await handleDeleteResult(error, `${campaign.name} could not be deleted.`)
+    if (deleted && openCampaignId === campaign.id) closeCampaignBrowser()
   }
 
   async function deleteLocation(location: Location) {
@@ -220,7 +210,11 @@ export function CampaignManager({ userId }: { userId: string }) {
     if (!confirmed) return
 
     const { error } = await supabase.from('locations').delete().eq('id', location.id)
-    await handleDeleteResult(error, `${location.name} could not be deleted.`)
+    const deleted = await handleDeleteResult(error, `${location.name} could not be deleted.`)
+    if (deleted && selectedLocationId === location.id) {
+      setSelectedLocationId(null)
+      setEditor(null)
+    }
   }
 
   async function deleteShop(shop: Shop) {
@@ -237,22 +231,28 @@ export function CampaignManager({ userId }: { userId: string }) {
     if (error) {
       console.error(failureMessage, error)
       setMessage(failureMessage)
-      return
+      return false
     }
 
     await refreshHierarchy()
+    return true
   }
 
-  async function finishSave(expand?: { campaignId?: string; locationId?: string }) {
+  async function finishSave() {
     const refreshed = await refreshHierarchy()
     if (!refreshed) return
+    setEditor(null)
+  }
 
-    if (expand?.campaignId) {
-      setExpandedCampaigns((current) => new Set(current).add(expand.campaignId as string))
-    }
-    if (expand?.locationId) {
-      setExpandedLocations((current) => new Set(current).add(expand.locationId as string))
-    }
+  function openCampaignBrowser(campaignId: string) {
+    setOpenCampaignId(campaignId)
+    setSelectedLocationId(null)
+    setEditor(null)
+  }
+
+  function closeCampaignBrowser() {
+    setOpenCampaignId(null)
+    setSelectedLocationId(null)
     setEditor(null)
   }
 
@@ -333,20 +333,11 @@ export function CampaignManager({ userId }: { userId: string }) {
         <div className="campaign-list">
           {campaigns.map((campaign) => {
             const campaignLocations = locations.filter((location) => location.campaign_id === campaign.id)
-            const expanded = expandedCampaigns.has(campaign.id)
 
             return (
               <article className="campaign-panel" key={campaign.id}>
                 <div className="entity-row campaign-row">
-                  <button
-                    className="expand-button"
-                    type="button"
-                    aria-expanded={expanded}
-                    aria-label={`${expanded ? 'Collapse' : 'Expand'} ${campaign.name}`}
-                    onClick={() => toggleExpanded(campaign.id, 'campaign')}
-                  >
-                    {expanded ? '−' : '+'}
-                  </button>
+                  <div className="shop-marker" aria-hidden="true">◆</div>
                   <div className="entity-copy">
                     <div className="entity-title-line">
                       <h3>{campaign.name}</h3>
@@ -359,11 +350,8 @@ export function CampaignManager({ userId }: { userId: string }) {
                       {campaignLocations.length} {campaignLocations.length === 1 ? 'location' : 'locations'}
                     </span>
                     <EntityActions
-                      onAdd={() => {
-                        setExpandedCampaigns((current) => new Set(current).add(campaign.id))
-                        setEditor({ type: 'location', campaignId: campaign.id })
-                      }}
-                      addLabel="Add location"
+                      onAdd={() => openCampaignBrowser(campaign.id)}
+                      addLabel="Enter campaign"
                       onEdit={() => setEditor({ type: 'campaign', campaign })}
                       onDelete={() => void deleteCampaign(campaign)}
                     />
@@ -379,45 +367,41 @@ export function CampaignManager({ userId }: { userId: string }) {
                   />
                 )}
 
-                {expanded && (
-                  <div className="location-list">
-                    {editor?.type === 'location' && editor.campaignId === campaign.id && !editor.location && (
-                      <LocationEditor
-                        campaignId={campaign.id}
-                        onCancel={() => setEditor(null)}
-                        onSaved={() => finishSave({ campaignId: campaign.id })}
-                      />
-                    )}
-
-                    {campaignLocations.length === 0 && !(editor?.type === 'location' && editor.campaignId === campaign.id) ? (
-                      <p className="nested-empty">No locations have been added to this campaign.</p>
-                    ) : campaignLocations.map((location) => (
-                      <LocationPanel
-                        key={location.id}
-                        location={location}
-                        shops={shops.filter((shop) => shop.location_id === location.id)}
-                        expanded={expandedLocations.has(location.id)}
-                        editor={editor}
-                        onToggle={() => toggleExpanded(location.id, 'location')}
-                        onAddShop={() => {
-                          setExpandedLocations((current) => new Set(current).add(location.id))
-                          setEditor({ type: 'shop', locationId: location.id })
-                        }}
-                        onEdit={() => setEditor({ type: 'location', campaignId: campaign.id, location })}
-                        onDelete={() => void deleteLocation(location)}
-                        onCancelEditor={() => setEditor(null)}
-                        onLocationSaved={() => finishSave({ campaignId: campaign.id })}
-                        onShopSaved={() => finishSave({ campaignId: campaign.id, locationId: location.id })}
-                        onEditShop={(shop) => setEditor({ type: 'shop', locationId: location.id, shop })}
-                        onDeleteShop={(shop) => void deleteShop(shop)}
-                      />
-                    ))}
-                  </div>
-                )}
               </article>
             )
           })}
         </div>
+      )}
+
+      {openCampaignId && campaigns.find((campaign) => campaign.id === openCampaignId) && (
+        <DmCampaignBrowser
+          campaign={campaigns.find((campaign) => campaign.id === openCampaignId) as Campaign}
+          locations={locations.filter((location) => location.campaign_id === openCampaignId)}
+          shops={shops}
+          selectedLocationId={selectedLocationId}
+          editor={editor}
+          userId={userId}
+          onSelectLocation={(locationId) => {
+            setSelectedLocationId(locationId)
+            setEditor(null)
+          }}
+          onBack={() => {
+            if (editor) setEditor(null)
+            else if (selectedLocationId) setSelectedLocationId(null)
+            else closeCampaignBrowser()
+          }}
+          onClose={closeCampaignBrowser}
+          onEditCampaign={(campaign) => setEditor({ type: 'campaign', campaign })}
+          onAddLocation={(campaignId) => setEditor({ type: 'location', campaignId })}
+          onEditLocation={(location) => setEditor({ type: 'location', campaignId: location.campaign_id, location })}
+          onAddShop={(locationId) => setEditor({ type: 'shop', locationId })}
+          onEditShop={(shop) => setEditor({ type: 'shop', locationId: shop.location_id, shop })}
+          onDeleteCampaign={(campaign) => void deleteCampaign(campaign)}
+          onDeleteLocation={(location) => void deleteLocation(location)}
+          onDeleteShop={(shop) => void deleteShop(shop)}
+          onCancelEditor={() => setEditor(null)}
+          onSaved={finishSave}
+        />
       )}
     </section>
   )
@@ -496,102 +480,311 @@ function JoinRequestQueue({
   )
 }
 
-function LocationPanel({
+function DmCampaignBrowser({
+  campaign,
+  locations,
+  shops,
+  selectedLocationId,
+  editor,
+  userId,
+  onSelectLocation,
+  onBack,
+  onClose,
+  onEditCampaign,
+  onAddLocation,
+  onEditLocation,
+  onAddShop,
+  onEditShop,
+  onDeleteCampaign,
+  onDeleteLocation,
+  onDeleteShop,
+  onCancelEditor,
+  onSaved,
+}: {
+  campaign: Campaign
+  locations: Location[]
+  shops: Shop[]
+  selectedLocationId: string | null
+  editor: EditorState
+  userId: string
+  onSelectLocation: (locationId: string) => void
+  onBack: () => void
+  onClose: () => void
+  onEditCampaign: (campaign: Campaign) => void
+  onAddLocation: (campaignId: string) => void
+  onEditLocation: (location: Location) => void
+  onAddShop: (locationId: string) => void
+  onEditShop: (shop: Shop) => void
+  onDeleteCampaign: (campaign: Campaign) => void
+  onDeleteLocation: (location: Location) => void
+  onDeleteShop: (shop: Shop) => void
+  onCancelEditor: () => void
+  onSaved: () => Promise<void>
+}) {
+  const selectedLocation = locations.find((location) => location.id === selectedLocationId) ?? null
+  const locationShops = selectedLocation
+    ? shops.filter((shop) => shop.location_id === selectedLocation.id)
+    : []
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [])
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      onBack()
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onBack])
+
+  return (
+    <div className="campaign-browser-backdrop" role="presentation">
+      <section
+        className="campaign-browser dm-campaign-browser"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="dm-campaign-browser-title"
+      >
+        <header className="campaign-browser-header">
+          <button className="browser-back-button" type="button" onClick={onBack}>
+            {selectedLocation ? '← Campaign' : '← Workshop'}
+          </button>
+          <div className="browser-breadcrumb" id="dm-campaign-browser-title">
+            <button type="button" onClick={() => selectedLocation && onBack()}>{campaign.name}</button>
+            {selectedLocation && (
+              <>
+                <span aria-hidden="true">—</span>
+                <strong>{selectedLocation.name}</strong>
+              </>
+            )}
+          </div>
+          <button className="browser-close-button" type="button" onClick={onClose} aria-label="Close campaign editor">
+            ×
+          </button>
+        </header>
+
+        <div className="campaign-browser-content">
+          {selectedLocation ? (
+            <DmLocationLayer
+              location={selectedLocation}
+              shops={locationShops}
+              editor={editor}
+              onAddShop={() => onAddShop(selectedLocation.id)}
+              onEditLocation={() => onEditLocation(selectedLocation)}
+              onDeleteLocation={() => onDeleteLocation(selectedLocation)}
+              onEditShop={onEditShop}
+              onDeleteShop={onDeleteShop}
+              onCancelEditor={onCancelEditor}
+              onSaved={onSaved}
+            />
+          ) : (
+            <DmCampaignLayer
+              campaign={campaign}
+              locations={locations}
+              editor={editor}
+              userId={userId}
+              shops={shops}
+              onSelectLocation={onSelectLocation}
+              onEditCampaign={() => onEditCampaign(campaign)}
+              onDeleteCampaign={() => onDeleteCampaign(campaign)}
+              onAddLocation={() => onAddLocation(campaign.id)}
+              onEditLocation={onEditLocation}
+              onDeleteLocation={onDeleteLocation}
+              onCancelEditor={onCancelEditor}
+              onSaved={onSaved}
+            />
+          )}
+        </div>
+
+        <footer className="campaign-browser-footer">
+          Press <kbd>Esc</kbd> to {editor ? 'cancel editing' : selectedLocation ? 'return to the campaign' : 'close'}.
+        </footer>
+      </section>
+    </div>
+  )
+}
+
+function DmCampaignLayer({
+  campaign,
+  locations,
+  shops,
+  editor,
+  userId,
+  onSelectLocation,
+  onEditCampaign,
+  onDeleteCampaign,
+  onAddLocation,
+  onEditLocation,
+  onDeleteLocation,
+  onCancelEditor,
+  onSaved,
+}: {
+  campaign: Campaign
+  locations: Location[]
+  shops: Shop[]
+  editor: EditorState
+  userId: string
+  onSelectLocation: (locationId: string) => void
+  onEditCampaign: () => void
+  onDeleteCampaign: () => void
+  onAddLocation: () => void
+  onEditLocation: (location: Location) => void
+  onDeleteLocation: (location: Location) => void
+  onCancelEditor: () => void
+  onSaved: () => Promise<void>
+}) {
+  return (
+    <div className="browser-view dm-browser-view">
+      <div className="browser-introduction">
+        <p className="eyebrow">DM campaign editor</p>
+        <div className="dm-browser-title-line">
+          <div>
+            <h2>{campaign.name}</h2>
+            <span className={campaign.is_listed ? 'visibility-badge listed' : 'visibility-badge'}>
+              {campaign.is_listed ? 'Listed' : 'Unlisted'}
+            </span>
+          </div>
+          <EntityActions onEdit={onEditCampaign} onDelete={onDeleteCampaign} />
+        </div>
+        {campaign.description && <p>{campaign.description}</p>}
+      </div>
+
+      {editor?.type === 'campaign' && editor.campaign?.id === campaign.id && (
+        <CampaignEditor campaign={campaign} userId={userId} onCancel={onCancelEditor} onSaved={onSaved} />
+      )}
+
+      <div className="dm-browser-section-heading">
+        <h3 className="browser-list-heading">Locations</h3>
+        {!editor && (
+          <button className="button button-primary button-inline" type="button" onClick={onAddLocation}>Add location</button>
+        )}
+      </div>
+
+      {editor?.type === 'location' && editor.campaignId === campaign.id && !editor.location && (
+        <LocationEditor campaignId={campaign.id} onCancel={onCancelEditor} onSaved={onSaved} />
+      )}
+
+      {locations.length === 0 && !editor ? (
+        <div className="browser-empty-state">
+          <h4>No locations yet</h4>
+          <p>Add the first location to begin building this campaign's shopping directory.</p>
+        </div>
+      ) : (
+        <div className="browser-card-list dm-browser-card-list">
+          {locations.map((location) => {
+            const shopCount = shops.filter((shop) => shop.location_id === location.id).length
+            const editing = editor?.type === 'location' && editor.location?.id === location.id
+
+            return (
+              <div className="dm-browser-card-wrap" key={location.id}>
+                <button className="browser-entity-card" type="button" onClick={() => onSelectLocation(location.id)}>
+                  <span className="classification-badge">{titleCase(location.classification)}</span>
+                  <strong>{location.name}</strong>
+                  <span>{location.description || 'No location description has been provided.'}</span>
+                  <small>{shopCount} {shopCount === 1 ? 'shop' : 'shops'} · Manage location →</small>
+                </button>
+                <div className="dm-card-actions">
+                  <button className="text-button" type="button" onClick={() => onEditLocation(location)}>Edit</button>
+                  <button className="text-button text-button-danger" type="button" onClick={() => onDeleteLocation(location)}>Delete</button>
+                </div>
+                {editing && (
+                  <LocationEditor campaignId={campaign.id} location={location} onCancel={onCancelEditor} onSaved={onSaved} />
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DmLocationLayer({
   location,
   shops,
-  expanded,
   editor,
-  onToggle,
   onAddShop,
-  onEdit,
-  onDelete,
-  onCancelEditor,
-  onLocationSaved,
-  onShopSaved,
+  onEditLocation,
+  onDeleteLocation,
   onEditShop,
   onDeleteShop,
+  onCancelEditor,
+  onSaved,
 }: {
   location: Location
   shops: Shop[]
-  expanded: boolean
   editor: EditorState
-  onToggle: () => void
   onAddShop: () => void
-  onEdit: () => void
-  onDelete: () => void
-  onCancelEditor: () => void
-  onLocationSaved: () => Promise<void>
-  onShopSaved: () => Promise<void>
+  onEditLocation: () => void
+  onDeleteLocation: () => void
   onEditShop: (shop: Shop) => void
   onDeleteShop: (shop: Shop) => void
+  onCancelEditor: () => void
+  onSaved: () => Promise<void>
 }) {
   return (
-    <article className="location-panel">
-      <div className="entity-row location-row">
-        <button
-          className="expand-button small"
-          type="button"
-          aria-expanded={expanded}
-          aria-label={`${expanded ? 'Collapse' : 'Expand'} ${location.name}`}
-          onClick={onToggle}
-        >
-          {expanded ? '−' : '+'}
-        </button>
-        <div className="entity-copy">
-          <div className="entity-title-line">
-            <h4>{location.name}</h4>
-            <span className="classification-badge">{titleCase(location.classification)}</span>
-          </div>
-          {location.description && <p>{location.description}</p>}
-          <span className="entity-count">{shops.length} {shops.length === 1 ? 'shop' : 'shops'}</span>
-          <EntityActions onAdd={onAddShop} addLabel="Add shop" onEdit={onEdit} onDelete={onDelete} />
+    <div className="browser-view dm-browser-view">
+      <div className="browser-introduction">
+        <p className="eyebrow">{titleCase(location.classification)}</p>
+        <div className="dm-browser-title-line">
+          <h2>{location.name}</h2>
+          <EntityActions onEdit={onEditLocation} onDelete={onDeleteLocation} />
         </div>
+        {location.description && <p>{location.description}</p>}
       </div>
 
       {editor?.type === 'location' && editor.location?.id === location.id && (
-        <LocationEditor
-          campaignId={location.campaign_id}
-          location={location}
-          onCancel={onCancelEditor}
-          onSaved={onLocationSaved}
-        />
+        <LocationEditor campaignId={location.campaign_id} location={location} onCancel={onCancelEditor} onSaved={onSaved} />
       )}
 
-      {expanded && (
-        <div className="shop-list">
-          {editor?.type === 'shop' && editor.locationId === location.id && !editor.shop && (
-            <ShopEditor locationId={location.id} onCancel={onCancelEditor} onSaved={onShopSaved} />
-          )}
+      <div className="dm-browser-section-heading">
+        <h3 className="browser-list-heading">Shops</h3>
+        {!editor && (
+          <button className="button button-primary button-inline" type="button" onClick={onAddShop}>Add shop</button>
+        )}
+      </div>
 
-          {shops.length === 0 && !(editor?.type === 'shop' && editor.locationId === location.id) ? (
-            <p className="nested-empty shop-empty">No shops have been added to this location.</p>
-          ) : shops.map((shop) => (
-            <div key={shop.id}>
-              <article className="entity-row shop-row">
-                <div className="shop-marker" aria-hidden="true">◆</div>
-                <div className="entity-copy">
-                  <div className="entity-title-line">
-                    <h5>{shop.name}</h5>
-                    <span className="classification-badge shop-classification">{titleCase(shop.classification)}</span>
-                  </div>
-                  {shop.description && <p>{shop.description}</p>}
-                  <EntityActions onEdit={() => onEditShop(shop)} onDelete={() => onDeleteShop(shop)} />
+      {editor?.type === 'shop' && editor.locationId === location.id && !editor.shop && (
+        <ShopEditor locationId={location.id} onCancel={onCancelEditor} onSaved={onSaved} />
+      )}
+
+      {shops.length === 0 && !editor ? (
+        <div className="browser-empty-state">
+          <h4>No shops yet</h4>
+          <p>Add the first shop to this location.</p>
+        </div>
+      ) : (
+        <div className="browser-card-list dm-browser-card-list">
+          {shops.map((shop) => {
+            const editing = editor?.type === 'shop' && editor.shop?.id === shop.id
+            return (
+              <div className="dm-browser-card-wrap shop-management-card" key={shop.id}>
+                <article className="browser-entity-card">
+                  <span className="classification-badge shop-classification">{titleCase(shop.classification)}</span>
+                  <strong>{shop.name}</strong>
+                  <span>{shop.description || 'No shop description has been provided.'}</span>
+                </article>
+                <div className="dm-card-actions">
+                  <button className="text-button" type="button" onClick={() => onEditShop(shop)}>Edit</button>
+                  <button className="text-button text-button-danger" type="button" onClick={() => onDeleteShop(shop)}>Delete</button>
                 </div>
-              </article>
-
-              {editor?.type === 'shop' && editor.shop?.id === shop.id && (
-                <ShopEditor
-                  locationId={location.id}
-                  shop={shop}
-                  onCancel={onCancelEditor}
-                  onSaved={onShopSaved}
-                />
-              )}
-            </div>
-          ))}
+                {editing && (
+                  <ShopEditor locationId={location.id} shop={shop} onCancel={onCancelEditor} onSaved={onSaved} />
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
-    </article>
+    </div>
   )
 }
 
