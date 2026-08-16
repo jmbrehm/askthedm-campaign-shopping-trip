@@ -42,7 +42,17 @@ const EMPTY_DRAFT: CharacterDraft = {
   copperPieces: '0',
 }
 
-export function CharacterManager({ userId }: { userId: string }) {
+export function CharacterManager({
+  userId,
+  selectable = false,
+  selectedCharacterId = null,
+  onSelectCharacter,
+}: {
+  userId: string
+  selectable?: boolean
+  selectedCharacterId?: string | null
+  onSelectCharacter?: (characterId: string | null) => void
+}) {
   const [characters, setCharacters] = useState<Character[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -138,6 +148,10 @@ export function CharacterManager({ userId }: { userId: string }) {
       return
     }
 
+    if (selectedCharacterId === character.id) {
+      onSelectCharacter?.(null)
+    }
+
     await refreshCharacters()
   }
 
@@ -185,6 +199,9 @@ export function CharacterManager({ userId }: { userId: string }) {
             <CharacterCard
               key={character.id}
               character={character}
+              selectable={selectable}
+              selected={selectedCharacterId === character.id}
+              onSelect={() => onSelectCharacter?.(character.id)}
               onEdit={() => openEditForm(character)}
               onDelete={() => void deleteCharacter(character)}
             />
@@ -197,10 +214,16 @@ export function CharacterManager({ userId }: { userId: string }) {
 
 function CharacterCard({
   character,
+  selectable,
+  selected,
+  onSelect,
   onEdit,
   onDelete,
 }: {
   character: Character
+  selectable: boolean
+  selected: boolean
+  onSelect: () => void
   onEdit: () => void
   onDelete: () => void
 }) {
@@ -211,7 +234,7 @@ function CharacterCard({
   ].filter(Boolean) as string[]
 
   return (
-    <article className="character-card">
+    <article className={selected ? 'character-card character-card-selected' : 'character-card'}>
       <div className="character-card-header">
         <div>
           <p className="character-kicker">Character</p>
@@ -222,6 +245,17 @@ function CharacterCard({
           <button className="text-button text-button-danger" type="button" onClick={onDelete}>Delete</button>
         </div>
       </div>
+
+      {selectable && (
+        <button
+          className={selected ? 'character-select-button selected' : 'character-select-button'}
+          type="button"
+          aria-pressed={selected}
+          onClick={onSelect}
+        >
+          {selected ? '✓ Selected for campaign' : 'Select for campaign'}
+        </button>
+      )}
 
       <div className="skill-grid" aria-label="Haggling skill bonuses">
         <div>

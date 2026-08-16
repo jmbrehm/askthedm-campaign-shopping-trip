@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import type { Session } from '@supabase/supabase-js'
+import { CampaignDirectory } from './components/CampaignDirectory'
 import { CampaignManager } from './components/CampaignManager'
 import { CharacterManager } from './components/CharacterManager'
 import { normalizeUsername, usernameToAuthEmail, validateUsername } from './lib/auth'
@@ -126,6 +127,8 @@ function Dashboard({
   profileError: string
   userId: string
 }) {
+  const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null)
+
   return (
     <section className="dashboard">
       {profileError ? (
@@ -140,13 +143,22 @@ function Dashboard({
             <div className="role-badge">{profile.is_admin ? 'DM / Administrator' : 'Player'}</div>
           </div>
 
-          <div className={profile.is_admin ? 'dashboard-workspace admin-workspace' : 'dashboard-workspace player-workspace'}>
-            <div className={profile.is_admin ? 'dashboard-column character-dashboard-column' : 'player-dashboard-content'}>
-              <CharacterManager userId={userId} />
+          <div className="dashboard-workspace split-workspace">
+            <div className="dashboard-column character-dashboard-column">
+              <CharacterManager
+                userId={userId}
+                selectable={!profile.is_admin}
+                selectedCharacterId={selectedCharacterId}
+                onSelectCharacter={setSelectedCharacterId}
+              />
             </div>
-            {profile.is_admin && (
+            {profile.is_admin ? (
               <div className="dashboard-column campaign-dashboard-column">
                 <CampaignManager userId={userId} />
+              </div>
+            ) : (
+              <div className="dashboard-column campaign-directory-column">
+                <CampaignDirectory selectedCharacterId={selectedCharacterId} />
               </div>
             )}
           </div>
