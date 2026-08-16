@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { ItemCatalogManager } from './ItemCatalogManager'
 import { PurchaseLedger } from './PurchaseHistory'
@@ -1134,6 +1134,16 @@ function ManualInventoryEditor({
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [priceFocused, setPriceFocused] = useState(false)
+
+  const matchingItems = useMemo(() => {
+    const query = itemQuery.trim().toLowerCase()
+    if (!query) return catalogItems.slice(0, 12)
+    return catalogItems
+      .filter((item) => item.name.toLowerCase().includes(query))
+      .slice(0, 12)
+  }, [catalogItems, itemQuery])
 
   useEffect(() => {
     let isActive = true
@@ -1158,19 +1168,19 @@ function ManualInventoryEditor({
     }
   }, [])
 
-  function chooseCatalogItem(value: string) {
-    setItemQuery(value)
-    const selected = catalogItems.find((item) => item.name.toLowerCase() === value.trim().toLowerCase())
-    setSelectedItemId(selected?.id ?? '')
-    if (!selected) return
+  function selectCatalogItem(selected: ManualCatalogItem) {
+    setItemQuery(selected.name)
+    setSelectedItemId(selected.id)
     setDisplayName(selected.name)
     setPriceGp(selected.fixed_price_cp === null ? '' : formatGpFromCopper(selected.fixed_price_cp))
+    setSearchOpen(false)
+    setMessage('')
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const selectedItem = catalogItems.find((item) => item.id === selectedItemId)
-    const numericPrice = Number(priceGp)
+    const numericPrice = priceGp.trim() === '' ? null : Number(priceGp)
     const numericQuantity = Number(quantity)
 
     if (!selectedItem) {
@@ -1181,7 +1191,7 @@ function ManualInventoryEditor({
       setMessage('Enter a display name up to 240 characters.')
       return
     }
-    if (priceGp.trim() === '' || !Number.isFinite(numericPrice) || numericPrice < 0 || Math.round(numericPrice * 100) > Number.MAX_SAFE_INTEGER) {
+    if (numericPrice !== null && (!Number.isFinite(numericPrice) || numericPrice < 0 || Math.round(numericPrice * 100) > Number.MAX_SAFE_INTEGER)) {
       setMessage('Enter a valid nonnegative price in gold pieces.')
       return
     }
@@ -1192,12 +1202,15 @@ function ManualInventoryEditor({
 
     setSubmitting(true)
     setMessage('')
+    const finalPriceCp = numericPrice === null
+      ? rollRarityPriceCp(selectedItem.rarity)
+      : Math.round(numericPrice * 100)
     const { error } = await supabase.from('shop_inventory').insert({
       shop_id: shopId,
       item_id: selectedItem.id,
       display_name: displayName.trim(),
       rarity: selectedItem.rarity,
-      price_cp: Math.round(numericPrice * 100),
+      price_cp: finalPriceCp,
       quantity: numericQuantity,
       is_infinite: isInfinite,
       source: 'manual',
@@ -1224,33 +1237,70 @@ function ManualInventoryEditor({
         <button className="text-button" type="button" onClick={onCancel}>Cancel</button>
       </div>
 
-      <div>
+      <div className="manual-catalog-search">
         <label htmlFor="manual-catalog-item">Catalog item</label>
-        <input
-          id="manual-catalog-item"
-          list="manual-catalog-items"
-          value={itemQuery}
-          onChange={(event) => chooseCatalogItem(event.target.value)}
-          placeholder={loading ? 'Loading catalog…' : 'Type an item name'}
-          autoComplete="off"
-          disabled={loading}
-          required
-        />
-        <datalist id="manual-catalog-items">
-          {catalogItems.map((item) => <option value={item.name} key={item.id}>{titleCase(item.classification)} · {titleCase(item.rarity)}</option>)}
-        </datalist>
+        <div className="manual-catalog-combobox">
+          <input
+            id="manual-catalog-item"
+            value={itemQuery}
+            onChange={(event) => {
+              setItemQuery(event.target.value)
+              setSelectedItemId('')
+              setSearchOpen(true)
+            }}
+            onFocus={() => setSearchOpen(true)}
+            onBlur={() => setSearchOpen(false)}
+            placeholder={loading ? 'Loading catalog…' : 'Search by item name'}
+            autoComplete="off"
+            disabled={loading}
+            required
+            role="combobox"
+            aria-expanded={searchOpen}
+            aria-controls="manual-catalog-results"
+          />
+          {searchOpen && !loading && (
+            <div className="manual-catalog-results" id="manual-catalog-results" role="listbox">
+              {matchingItems.length === 0 ? (
+                <p>No catalog items match “{itemQuery.trim()}”.</p>
+              ) : matchingItems.map((item) => (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={item.id === selectedItemId}
+                  key={item.id}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => selectCatalogItem(item)}
+                >
+                  <strong>{item.name}</strong>
+                  <span>{titleCase(item.classification)} · {titleCase(item.rarity)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        {selectedItemId && <p className="manual-catalog-selection">Selected: {itemQuery}</p>}
         <p className="field-hint">Generic items can be given a resolved name below, such as “+2 Breastplate.”</p>
       </div>
 
       <div>
         <label htmlFor="manual-display-name">Displayed item name</label>
-        <input id="manual-display-name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} maxLength={240} required />
+        <input id="manual-display-name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} maxLength={240} autoComplete="off" required />
       </div>
 
       <div className="form-grid two-columns">
         <div>
           <label htmlFor="manual-price">Price (gp)</label>
-          <input id="manual-price" type="number" min="0" step="0.01" value={priceGp} onChange={(event) => setPriceGp(event.target.value)} required />
+          <input
+            id="manual-price"
+            type="number"
+            min="0"
+            step="0.01"
+            value={priceGp}
+            onChange={(event) => setPriceGp(event.target.value)}
+            onFocus={() => setPriceFocused(true)}
+            onBlur={() => setPriceFocused(false)}
+            placeholder={priceFocused ? '' : 'Leave blank to price by rarity'}
+          />
         </div>
         <div>
           <label htmlFor="manual-quantity">Quantity</label>
@@ -1661,6 +1711,18 @@ function generationSummaryText(summary: ShopGenerationSummary) {
 
 function formatGpFromCopper(copperPieces: number) {
   return (copperPieces / 100).toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')
+}
+
+function rollRarityPriceCp(rarity: ManualCatalogItem['rarity']) {
+  const die = (sides: number) => Math.floor(Math.random() * sides) + 1
+
+  switch (rarity) {
+    case 'common': return (die(6) + 1) * 10 * 100
+    case 'uncommon': return die(6) * 100 * 100
+    case 'rare': return (die(10) + die(10)) * 1_000 * 100
+    case 'very_rare': return (die(4) + 1) * 10_000 * 100
+    case 'legendary': return (die(6) + die(6)) * 25_000 * 100
+  }
 }
 
 function formatRequestDate(value: string) {

@@ -2235,6 +2235,74 @@ textarea:focus {
   color: #3d2c20;
 }
 
+.manual-catalog-search {
+  min-width: 0;
+}
+
+.manual-catalog-combobox {
+  position: relative;
+}
+
+.manual-catalog-results {
+  position: absolute;
+  z-index: 12;
+  top: calc(100% - 1px);
+  right: 0;
+  left: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid #9f8962;
+  border-radius: 0 0 8px 8px;
+  background: #fffaf0;
+  box-shadow: 0 14px 28px rgba(48, 36, 26, 0.24);
+}
+
+.manual-catalog-results button {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 11px 13px;
+  border: 0;
+  border-bottom: 1px solid #dfd0b4;
+  background: transparent;
+  color: #34261b;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.manual-catalog-results button:last-child {
+  border-bottom: 0;
+}
+
+.manual-catalog-results button:hover,
+.manual-catalog-results button:focus-visible {
+  background: #ead9b8;
+}
+
+.manual-catalog-results button span {
+  flex: 0 0 auto;
+  color: #78654b;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.manual-catalog-results > p {
+  margin: 0;
+  padding: 13px;
+  color: #76654e;
+  font-size: 0.82rem;
+}
+
+.manual-catalog-selection {
+  margin: 7px 0 0;
+  color: #3f6638;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
 .dm-browser-card-wrap > .entity-editor {
   position: relative;
   z-index: 2;
@@ -2248,8 +2316,20 @@ textarea:focus {
 }
 
 .catalog-content {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
   color: #30241a;
   background: #eee2c9;
+}
+
+.catalog-list-view,
+.catalog-item-list,
+.catalog-item-card,
+.catalog-item-copy {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .catalog-list-view h2,
@@ -2311,6 +2391,8 @@ textarea:focus {
 }
 
 .catalog-item-card {
+  width: 100%;
+  overflow: hidden;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -2342,6 +2424,8 @@ textarea:focus {
   color: #675744;
   line-height: 1.5;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .rarity-badge {
@@ -2369,12 +2453,15 @@ textarea:focus {
 }
 
 .catalog-item-flags span {
+  max-width: 100%;
   padding: 4px 7px;
   border-radius: 5px;
   background: #e8dcc3;
   color: #6c5a42;
   font-size: 0.7rem;
   font-weight: 750;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .catalog-item-actions {
