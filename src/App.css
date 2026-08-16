@@ -662,6 +662,119 @@ textarea:focus {
   font-size: clamp(2rem, 5vw, 3rem);
 }
 
+.join-request-queue {
+  margin: 4px 4px 28px;
+  padding: 18px;
+  border: 1px solid #806a43;
+  border-radius: 10px;
+  background: rgba(244, 236, 216, 0.07);
+}
+
+.join-request-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.join-request-heading h3 {
+  margin: 0;
+  color: #f4ecd8;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.28rem;
+}
+
+.request-count {
+  display: grid;
+  min-width: 28px;
+  height: 28px;
+  place-items: center;
+  padding: 0 8px;
+  border: 1px solid #796847;
+  border-radius: 999px;
+  color: #cfc2ad;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.request-count.has-requests {
+  border-color: #c69c4b;
+  background: #c69c4b;
+  color: #231b12;
+}
+
+.no-requests {
+  margin: 13px 0 0;
+  color: #b8aa93;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.join-request-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.join-request-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 15px;
+  border: 1px solid #b5a27d;
+  border-radius: 8px;
+  background: #f4ecd8;
+}
+
+.request-character {
+  margin: 0;
+  color: #35271d;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.08rem;
+  font-weight: 700;
+}
+
+.request-details {
+  margin: 4px 0 0;
+  color: #685943;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.request-date {
+  margin: 5px 0 0;
+  color: #89785f;
+  font-size: 0.68rem;
+}
+
+.request-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.request-button {
+  padding: 8px 10px;
+  font-size: 0.74rem;
+}
+
+.request-button.accept {
+  border-color: #69825f;
+  background: #d3e2cc;
+  color: #35502d;
+}
+
+.request-button.reject {
+  border-color: #bd857a;
+  background: #f0d6d0;
+  color: #79372f;
+}
+
+.request-button:hover:not(:disabled) {
+  filter: brightness(0.94);
+}
+
 .hierarchy-message {
   margin-top: 24px;
   padding: 30px;
@@ -1163,6 +1276,19 @@ textarea:focus {
     align-items: flex-start;
     padding: 22px;
     flex-direction: column;
+  }
+
+  .join-request-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .request-actions {
+    width: 100%;
+  }
+
+  .request-actions .button {
+    flex: 1;
   }
 
   .section-heading-row,

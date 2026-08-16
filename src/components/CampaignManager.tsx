@@ -27,6 +27,23 @@ type Shop = {
   description: string
 }
 
+type JoinRequest = {
+  campaign_id: string
+  character_id: string
+  requested_at: string
+}
+
+type RequestCharacter = {
+  id: string
+  owner_id: string
+  name: string
+}
+
+type RequestProfile = {
+  id: string
+  username: string
+}
+
 type EditorState =
   | { type: 'campaign'; campaign?: Campaign }
   | { type: 'location'; campaignId: string; location?: Location }
@@ -54,25 +71,44 @@ export function CampaignManager({ userId }: { userId: string }) {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [locations, setLocations] = useState<Location[]>([])
   const [shops, setShops] = useState<Shop[]>([])
+  const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([])
+  const [requestCharacters, setRequestCharacters] = useState<RequestCharacter[]>([])
+  const [requestProfiles, setRequestProfiles] = useState<RequestProfile[]>([])
   const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set())
   const [expandedLocations, setExpandedLocations] = useState<Set<string>>(new Set())
   const [editor, setEditor] = useState<EditorState>(null)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
+  const [reviewingRequest, setReviewingRequest] = useState('')
 
   const fetchHierarchy = useCallback(async () => {
-    const [campaignResult, locationResult, shopResult] = await Promise.all([
+    const [campaignResult, locationResult, shopResult, requestResult, characterResult, profileResult] = await Promise.all([
       supabase.from('campaigns').select('id, name, description, is_listed').order('name'),
       supabase.from('locations').select('id, campaign_id, name, classification, description').order('display_order').order('name'),
       supabase.from('shops').select('id, location_id, name, classification, description').order('display_order').order('name'),
+      supabase
+        .from('campaign_character_memberships')
+        .select('campaign_id, character_id, requested_at')
+        .eq('status', 'pending')
+        .order('requested_at'),
+      supabase.from('characters').select('id, owner_id, name'),
+      supabase.from('profiles').select('id, username'),
     ])
 
-    const error = campaignResult.error ?? locationResult.error ?? shopResult.error
+    const error = campaignResult.error
+      ?? locationResult.error
+      ?? shopResult.error
+      ?? requestResult.error
+      ?? characterResult.error
+      ?? profileResult.error
 
     return {
       campaigns: campaignResult.data ?? [],
       locations: locationResult.data ?? [],
       shops: shopResult.data ?? [],
+      joinRequests: requestResult.data ?? [],
+      requestCharacters: characterResult.data ?? [],
+      requestProfiles: profileResult.data ?? [],
       error,
     }
   }, [])
@@ -90,6 +126,9 @@ export function CampaignManager({ userId }: { userId: string }) {
         setCampaigns(result.campaigns)
         setLocations(result.locations)
         setShops(result.shops)
+        setJoinRequests(result.joinRequests)
+        setRequestCharacters(result.requestCharacters)
+        setRequestProfiles(result.requestProfiles)
       }
 
       setLoading(false)
@@ -112,6 +151,9 @@ export function CampaignManager({ userId }: { userId: string }) {
     setCampaigns(result.campaigns)
     setLocations(result.locations)
     setShops(result.shops)
+    setJoinRequests(result.joinRequests)
+    setRequestCharacters(result.requestCharacters)
+    setRequestProfiles(result.requestProfiles)
     setMessage('')
     return true
   }
@@ -180,6 +222,33 @@ export function CampaignManager({ userId }: { userId: string }) {
     setEditor(null)
   }
 
+  async function reviewJoinRequest(request: JoinRequest, status: 'accepted' | 'rejected') {
+    const requestKey = `${request.campaign_id}:${request.character_id}`
+    setReviewingRequest(requestKey)
+    setMessage('')
+
+    const { error } = await supabase
+      .from('campaign_character_memberships')
+      .update({
+        status,
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: userId,
+      })
+      .eq('campaign_id', request.campaign_id)
+      .eq('character_id', request.character_id)
+      .eq('status', 'pending')
+
+    if (error) {
+      console.error('Could not review campaign join request:', error)
+      setMessage('That join request could not be updated. Please try again.')
+      setReviewingRequest('')
+      return
+    }
+
+    await refreshHierarchy()
+    setReviewingRequest('')
+  }
+
   return (
     <section className="campaign-section" aria-labelledby="campaigns-heading">
       <div className="section-heading-row">
@@ -193,6 +262,17 @@ export function CampaignManager({ userId }: { userId: string }) {
           </button>
         )}
       </div>
+
+      {!loading && (
+        <JoinRequestQueue
+          requests={joinRequests}
+          campaigns={campaigns}
+          characters={requestCharacters}
+          profiles={requestProfiles}
+          reviewingRequest={reviewingRequest}
+          onReview={(request, status) => void reviewJoinRequest(request, status)}
+        />
+      )}
 
       {editor?.type === 'campaign' && !editor.campaign && (
         <CampaignEditor
@@ -300,6 +380,79 @@ export function CampaignManager({ userId }: { userId: string }) {
                     ))}
                   </div>
                 )}
+              </article>
+            )
+          })}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function JoinRequestQueue({
+  requests,
+  campaigns,
+  characters,
+  profiles,
+  reviewingRequest,
+  onReview,
+}: {
+  requests: JoinRequest[]
+  campaigns: Campaign[]
+  characters: RequestCharacter[]
+  profiles: RequestProfile[]
+  reviewingRequest: string
+  onReview: (request: JoinRequest, status: 'accepted' | 'rejected') => void
+}) {
+  return (
+    <section className="join-request-queue" aria-labelledby="join-requests-heading">
+      <div className="join-request-heading">
+        <h3 id="join-requests-heading">Join requests</h3>
+        <span className={requests.length > 0 ? 'request-count has-requests' : 'request-count'}>
+          {requests.length}
+        </span>
+      </div>
+
+      {requests.length === 0 ? (
+        <p className="no-requests">No characters are waiting for campaign approval.</p>
+      ) : (
+        <div className="join-request-list">
+          {requests.map((request) => {
+            const campaign = campaigns.find((entry) => entry.id === request.campaign_id)
+            const character = characters.find((entry) => entry.id === request.character_id)
+            const profile = profiles.find((entry) => entry.id === character?.owner_id)
+            const requestKey = `${request.campaign_id}:${request.character_id}`
+            const submitting = reviewingRequest === requestKey
+
+            return (
+              <article className="join-request-card" key={requestKey}>
+                <div>
+                  <p className="request-character">{character?.name ?? 'Unknown character'}</p>
+                  <p className="request-details">
+                    <strong>{profile?.username ?? 'Unknown player'}</strong>
+                    {' wants to join '}
+                    <strong>{campaign?.name ?? 'Unknown campaign'}</strong>
+                  </p>
+                  <p className="request-date">Requested {formatRequestDate(request.requested_at)}</p>
+                </div>
+                <div className="request-actions">
+                  <button
+                    className="button request-button accept"
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => onReview(request, 'accepted')}
+                  >
+                    {submitting ? 'Working…' : 'Accept'}
+                  </button>
+                  <button
+                    className="button request-button reject"
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => onReview(request, 'rejected')}
+                  >
+                    Reject
+                  </button>
+                </div>
               </article>
             )
           })}
@@ -668,4 +821,12 @@ function validateText(name: string, description: string, maxNameLength: number) 
 
 function titleCase(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1)
+}
+
+function formatRequestDate(value: string) {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(value))
 }
