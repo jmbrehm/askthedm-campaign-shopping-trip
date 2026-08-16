@@ -28,6 +28,24 @@ type Shop = {
   description: string
 }
 
+type ShopGenerationSummary = {
+  shop_id: string
+  shop_name: string
+  slot_count: number
+  generated_count: number
+  infinite_count: number
+  rejected_count: number
+}
+
+type LocationGenerationSummary = {
+  location_id: string
+  location_name: string
+  shop_count: number
+  generated_count: number
+  rejected_count: number
+  shops: ShopGenerationSummary[]
+}
+
 type JoinRequest = {
   campaign_id: string
   character_id: string
@@ -734,6 +752,44 @@ function DmLocationLayer({
   onCancelEditor: () => void
   onSaved: () => Promise<void>
 }) {
+  const [generating, setGenerating] = useState('')
+  const [generationMessage, setGenerationMessage] = useState('')
+  const [generationError, setGenerationError] = useState('')
+
+  async function generateShop(shop: Shop) {
+    setGenerating(shop.id)
+    setGenerationMessage('')
+    setGenerationError('')
+    const { data, error } = await supabase.rpc('generate_shop_inventory', { target_shop_id: shop.id })
+
+    if (error || !data) {
+      console.error('Could not generate shop inventory:', error)
+      setGenerationError(`${shop.name} could not be stocked. ${error?.message ?? ''}`.trim())
+    } else {
+      const summary = data as ShopGenerationSummary
+      setGenerationMessage(generationSummaryText(summary))
+    }
+    setGenerating('')
+  }
+
+  async function generateLocation() {
+    setGenerating(location.id)
+    setGenerationMessage('')
+    setGenerationError('')
+    const { data, error } = await supabase.rpc('generate_location_inventory', { target_location_id: location.id })
+
+    if (error || !data) {
+      console.error('Could not generate location inventory:', error)
+      setGenerationError(`${location.name} could not be stocked. ${error?.message ?? ''}`.trim())
+    } else {
+      const summary = data as LocationGenerationSummary
+      setGenerationMessage(
+        `${summary.shop_count} ${summary.shop_count === 1 ? 'shop' : 'shops'} restocked with ${summary.generated_count} inventory ${summary.generated_count === 1 ? 'entry' : 'entries'}. ${summary.rejected_count} ${summary.rejected_count === 1 ? 'slot was' : 'slots were'} left empty.`,
+      )
+    }
+    setGenerating('')
+  }
+
   return (
     <div className="browser-view dm-browser-view">
       <div className="browser-introduction">
@@ -752,9 +808,17 @@ function DmLocationLayer({
       <div className="dm-browser-section-heading">
         <h3 className="browser-list-heading">Shops</h3>
         {!editor && (
-          <button className="button button-primary button-inline" type="button" onClick={onAddShop}>Add shop</button>
+          <div className="dm-browser-heading-actions">
+            <button className="button button-secondary button-inline" type="button" disabled={Boolean(generating) || shops.length === 0} onClick={() => void generateLocation()}>
+              {generating === location.id ? 'Generating…' : 'Generate all inventories'}
+            </button>
+            <button className="button button-primary button-inline" type="button" disabled={Boolean(generating)} onClick={onAddShop}>Add shop</button>
+          </div>
         )}
       </div>
+
+      {generationMessage && <p className="message message-success" role="status">{generationMessage}</p>}
+      {generationError && <p className="message message-error" role="alert">{generationError}</p>}
 
       {editor?.type === 'shop' && editor.locationId === location.id && !editor.shop && (
         <ShopEditor locationId={location.id} onCancel={onCancelEditor} onSaved={onSaved} />
@@ -777,6 +841,9 @@ function DmLocationLayer({
                   <span>{shop.description || 'No shop description has been provided.'}</span>
                 </article>
                 <div className="dm-card-actions">
+                  <button className="text-button add-button" type="button" disabled={Boolean(generating)} onClick={() => void generateShop(shop)}>
+                    {generating === shop.id ? 'Generating…' : 'Generate inventory'}
+                  </button>
                   <button className="text-button" type="button" onClick={() => onEditShop(shop)}>Edit</button>
                   <button className="text-button text-button-danger" type="button" onClick={() => onDeleteShop(shop)}>Delete</button>
                 </div>
@@ -1052,6 +1119,14 @@ function validateText(name: string, description: string, maxNameLength: number) 
 
 function titleCase(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1)
+}
+
+function generationSummaryText(summary: ShopGenerationSummary) {
+  const noteworthyCount = summary.generated_count - summary.infinite_count
+  const infiniteText = summary.infinite_count > 0
+    ? ` plus ${summary.infinite_count} infinite healing ${summary.infinite_count === 1 ? 'stock entry' : 'stock entries'}`
+    : ''
+  return `${summary.shop_name} was restocked with ${noteworthyCount} noteworthy ${noteworthyCount === 1 ? 'item' : 'items'}${infiniteText}. ${summary.rejected_count} ${summary.rejected_count === 1 ? 'slot was' : 'slots were'} left empty.`
 }
 
 function formatRequestDate(value: string) {

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { ShopInventory } from './ShopInventory'
 
 type Campaign = {
   id: string
@@ -301,11 +302,8 @@ function ShopView({ shop }: { shop: Shop }) {
         {shop.description && <p>{shop.description}</p>}
       </div>
 
-      <h3 className="browser-list-heading">Inventory</h3>
-      <div className="browser-empty-state inventory-placeholder">
-        <h4>The shelves are being stocked</h4>
-        <p>This is where available wares, prices, haggling, and purchase controls will appear when we build the inventory system.</p>
-      </div>
+      <h3 className="browser-list-heading">Noteworthy items available</h3>
+      <ShopInventory key={shop.id} shopId={shop.id} />
     </div>
   )
 }
